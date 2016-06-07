@@ -52,6 +52,7 @@ qadapters:
           #  #PBS -r y
     limits:
        timelimit: 1-0:0:0
+       timelimit_hard: 24-0:0:0
        min_cores: 96
        max_cores: 3888
     job: *job

@@ -27,6 +27,7 @@ qadapters:
          # Othere slurm options ... 
     limits:
        timelimit: 0:10:0
+       timelimit_hard: 48:0:0
        max_cores: 16
        min_mem_per_proc: 700
     hardware: *hardware
