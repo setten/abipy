@@ -22,7 +22,8 @@ qadapters:
        qname: defq
        qtype: slurm
     limits:
-       timelimit: 7-0:0:0
+       timelimit: 1-0:0:0
+       timelimit_hard: 7-0:0:0
        min_cores: 1
        max_cores: 16
     hardware: *hardware
