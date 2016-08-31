@@ -95,9 +95,9 @@ class GWConvergenceDataTest(PymatgenTest):
         for i, d in enumerate(data_list):
             conv_data.data[i] = dict(zip(data_names, d))
         data_names = ['ecut', 'full_width']
-        data_list = [[10, 99], [12, 101], [13, 101], [14, 101]]
+        data_list2 = [[10, 99], [12, 101], [13, 101], [14, 101]]
         ii = len(conv_data.data) + 1
-        for i, d in enumerate(data_list):
+        for i, d in enumerate(data_list2):
             conv_data.data[i+ii] = dict(zip(data_names, d))
 
         # self.assertEqual(conv_data.data[0]['gwgap'], 3.13196)
@@ -110,6 +110,17 @@ class GWConvergenceDataTest(PymatgenTest):
         self.assertEqual(conv_data.conv_res['derivatives'], conv_res['derivatives'])
         self.assertEqual(conv_data.conv_res['values'], conv_res['values'])
         # self.assertTrue(False)
+
+        conv_data.data = {}
+        incomplete_data_list = data_list[0:-1]
+        data_names = ['nbands', 'ecuteps',  'gwgap']
+        for i, d in enumerate(incomplete_data_list):
+            print(data_names, d)
+            conv_data.data[i] = dict(zip(data_names, d))
+        print(conv_data.data)
+        conv_data.find_conv_pars(tol=-0.1, silent=True)
+        self.assertEqual(conv_data.conv_res['values'], conv_res['values'])
+        self.assertTrue(False)
 
 
 class GWTestCodeInterfaces(PymatgenTest):

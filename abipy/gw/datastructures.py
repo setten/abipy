@@ -769,12 +769,17 @@ class GWConvergenceData(object):
         # print 'plot "'+self.name+'condat'+'"'
         for x in xs:
             zs = []
+            ys_corr = []
             for y in ys:
                 try:
                     zs.append(zd[x][y])
+                    ys_corr.append(y)
+                    # this ensures that only those ys for which the z exists for this particular x are collected
+                    # it enables fitting to incomplete data
                 except KeyError as ex:
-                    print(ex.message)
-            conv_data = determine_convergence(ys, zs, name=self.name, tol=tol, extra='ecuteps at '+str(x), plots=plots)
+                    print(ex.message, 'is missing for', x)
+            # print('testing', ys_corr, zs)
+            conv_data = determine_convergence(ys_corr, zs, name=self.name, tol=tol, extra='ecuteps at '+str(x), plots=plots)
             extrapolated.append(conv_data[4])
             if conv_data[0]:
                 y_conv.append(conv_data[1])
