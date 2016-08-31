@@ -119,8 +119,7 @@ class GWConvergenceDataTest(PymatgenTest):
             conv_data.data[i] = dict(zip(data_names, d))
         print(conv_data.data)
         conv_data.find_conv_pars(tol=-0.1, silent=True)
-        self.assertEqual(conv_data.conv_res['values'], conv_res['values'])
-        self.assertTrue(False)
+        self.assertEqual(conv_data.conv_res['derivatives'], conv_res['derivatives'])
 
 
 class GWTestCodeInterfaces(PymatgenTest):
