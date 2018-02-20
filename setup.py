@@ -16,38 +16,8 @@ if sys.version[0:3] < '2.7':
     sys.stderr.write("abipy requires Python version 2.7 or above. Exiting.")
     sys.exit(1)
 
-# Install ipython with notebook support.
-with_ipython = False
-#with_ipython = True
-#if '--with-ipython' in sys.argv:
-#    with_ipython = True
-#    sys.argv.remove('--with-ipython')
-
-#with_cython = True
-#try:
-#    from Cython.Distutils import build_ext
-#except ImportError:
-#    with_cython = False
-
 #cmdclass = {}
 ext_modules = []
-
-# Disable cython for the time being.
-#with_cexts = False
-#if with_cexts:
-#    with_cython = False
-#    if with_cython:
-#        import numpy as np
-#        #define_macros = [("CYTHON_TRACE", "1")]
-#        ext_modules += [
-#            Extension("abipy.extensions.klib", ["abipy/extensions/klib.pyx"], include_dirs=[np.get_include()])
-#        ]
-#        cmdclass.update({'build_ext': build_ext})
-#
-#    else:
-#        ext_modules += [
-#            Extension("abipy.extensions.klib", ["abipy/extensions/klib.c"], include_dirs=[np.get_include()])
-#        ]
 
 #-------------------------------------------------------------------------------
 # Useful globals and utility functions
@@ -133,10 +103,8 @@ def find_package_data():
         ],
         'abipy.htc': ["*.json"],
         'abipy.gui.awx' : ['images/*'],
-        'abipy.lessons': ["*.man"],
     }
 
-    #package_data.update(ref_files)
     return package_data
 
 
@@ -162,9 +130,7 @@ def find_scripts():
 
 def get_long_desc():
     with open("README.rst") as f:
-        long_desc = f.read()
-        #ind = long_desc.find("\n")
-        #long_desc = long_desc[ind + 1:]
+        return f.read()
         return long_desc
 
 
@@ -186,36 +152,8 @@ def cleanup():
 
 # List of external packages we rely on.
 # Note setup install will download them from Pypi if they are not available.
-install_requires = [
-    "six",
-    "prettytable",
-    "tabulate",
-    "apscheduler==2.1.0",
-    "pydispatcher>=2.0.5",
-    "tqdm",
-    "html2text",
-    "pyyaml>=3.11",
-    "pandas",
-    "numpy>=1.9",
-    "scipy>=0.14",
-    "spglib",
-    "pymatgen>=4.7.2",
-    "netCDF4",
-    "matplotlib>=1.5",
-    "seaborn",
-]
-
-#if with_ipython:
-#    install_requires += [
-#        "ipython",
-#        "jupyter",
-#        "nbformat",
-#    ]
-
-#if with_cython:
-#    install_requires += [
-#        "cython",
-#    ]
+with open("requirements.txt", "rt") as fh:
+    install_requires = [s.strip() for s in fh]
 
 with_wxpython = False
 if with_wxpython:
@@ -256,6 +194,7 @@ setup_args = dict(
       ext_modules=ext_modules,
       )
 
+
 if __name__ == "__main__":
     setup(**setup_args)
 
@@ -268,17 +207,6 @@ Please read the following if you are about to use abipy for the first time:
     in ~/.abinit/abipy or in the working directory in which you execute the flow.
     Examples are provided in abipy/data/managers
 
-[2]
-    If you are completely new to abipy you may want to start from the abipy lessons.
-    The simplest way is to move to an empty directory, start an ipython session and type:
-
-    In [1]: from abipy.lessons.lesson_kpoint_convergence import Lesson()
-
-followed by:
-
-    In [2]: Lesson()
-
-This will print the lessons documentation with further instructions.
 Have fun!
 """)
 

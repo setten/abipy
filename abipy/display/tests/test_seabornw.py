@@ -3,7 +3,7 @@ from __future__ import division, print_function, unicode_literals, absolute_impo
 
 import numpy as np
 import pandas as pd
-import seaborn.apionly as sns
+import seaborn as sns
 import abipy.display.seabornw as snw
 
 from abipy.core.testing import AbipyTest
@@ -17,13 +17,13 @@ class SeabornWidgetTest(AbipyTest):
             raise self.SkipTest("This test requires ipywidgets")
 
         tips = sns.load_dataset("tips")
-        snw.joinplot(tips)
+        snw.jointplot(tips)
 
         titanic = sns.load_dataset("titanic")
         snw.countplot(titanic)
 
         tips = sns.load_dataset("tips")
-        snw.joinplot(tips)
+        snw.jointplot(tips)
         snw.swarmplot(tips)
         snw.lmplot(tips)
 

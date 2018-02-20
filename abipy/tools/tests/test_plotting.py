@@ -4,6 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as np
 
+from abipy import abilab
 from abipy.tools.plotting import *
 from abipy.core.testing import AbipyTest
 
@@ -47,12 +48,44 @@ class TestPlotting(AbipyTest):
             cvec = np.empty(10, dtype=np.complex)
             assert plot_array(cvec, cplx_mode="im", show=False)
 
+    def test_plot_xy_with_hue(self):
+        """Testing plot_xy_with_hue."""
+        # Here is some sample data. The 'x2' data is slightly offset from 'x1'
+        x1 = list(range(0, 100, 10))
+        x2 = list(range(1, 100, 10))
+        x = x1 + x2
+
+        #The y-values I generate here mimic the general shape of my actual data
+        y1 = x1[::-1]
+        y2 = [i+25 for i in x1[::-1]]
+        y = y1 + y2
+
+        # Two levels of labels that will be applied to the data
+        z1 = ["1"] * 10
+        z2 = ["2"] * 10
+        z = z1 + z2
+
+        # A pandas data frame from the above data
+        import pandas as pd
+        df = pd.DataFrame({'x': x, 'y': y, 'z': z})
+
+        from abipy.tools.plotting import plot_xy_with_hue
+        if self.has_matplotlib():
+            assert plot_xy_with_hue(data=df, x="x", y="y", hue="z", ax=None, show=False)
+            assert plot_xy_with_hue(data=df, x="x", y="y", hue="z", ax=None, show=False,
+                                    color="red", marker="v")
+            assert plot_xy_with_hue(data=df, x="x", y="y", hue="z", decimals=0, ax=None, show=False,
+                                    color="red", marker="v")
+            with self.assertRaises(ValueError):
+                plot_xy_with_hue(data=df, x="foo", y="y", hue="bar", ax=None, show=False)
+
     def test_array_plotter(self):
         """Testing array plotter."""
         plotter = ArrayPlotter()
         assert len(plotter) == 0
         hello = np.ones((5, 2), dtype=np.complex)
         plotter.add_array("hello", hello)
+        assert "hello" in plotter.keys()
         with self.assertRaises(ValueError):
             plotter.add_array("hello", hello)
 
@@ -87,3 +120,11 @@ class TestPlotting(AbipyTest):
         with self.assertRaises(TypeError):
             x.append(-1)
             marker.extend((x, y, s))
+
+    def test_plot_cell_tools(self):
+        """Testing plot_unit_cell."""
+        lattice = abilab.Lattice.hexagonal(a=2, c=4)
+
+        if self.has_matplotlib():
+            fig, ax = plot_unit_cell(lattice, ax=None, linestyle="-")
+            assert hasattr(fig, "show")

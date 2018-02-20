@@ -78,11 +78,9 @@ def main(options):
     if options.info:
         # print doc string and exit.
         print(__doc__)
-        return 
+        return
 
-    flow = build_flow(options)
-    flow.build_and_pickle_dump()
-    return flow
+    return build_flow(options)
 
 
 if __name__ == "__main__":

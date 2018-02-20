@@ -7,6 +7,7 @@ from __future__ import print_function, division, unicode_literals, absolute_impo
 import itertools
 import numpy as np
 
+from monty.dev import deprecated
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from abipy.core import Structure
 
@@ -25,6 +26,9 @@ def from_cart_to_red(cartesian_tensor,lattice):
 
 class Tensor(object):
     """Representation of a 3x3 tensor"""
+
+    # TODO Remove
+    #@deprecated(message="abipy.core.Tensor is deprecated and will be replaced by pymatgen tensor in v0.4")
     def __init__(self, red_tensor, lattice, space="r"):
         """
         Args:
@@ -119,9 +123,9 @@ class Tensor(object):
         my_tensor = cartesian_tensor
 
         for real_sym in real_symmops:
-             mat = real_sym.rotation_matrix
-             prod_sym = np.dot(np.transpose(mat),np.dot(cartesian_tensor,mat))
-             sym_tensor = sym_tensor + prod_sym
+            mat = real_sym.rotation_matrix
+            prod_sym = np.dot(np.transpose(mat),np.dot(cartesian_tensor,mat))
+            sym_tensor = sym_tensor + prod_sym
 
         sym_tensor = sym_tensor/len(real_symmops)
 

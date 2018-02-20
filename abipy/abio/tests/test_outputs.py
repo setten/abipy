@@ -7,7 +7,7 @@ import abipy.data as abidata
 
 from abipy import abilab
 from abipy.core.testing import AbipyTest
-from abipy.abio.outputs import AbinitOutputFile, AbinitLogFile
+from abipy.abio.outputs import AbinitOutputFile, AbinitLogFile, AboRobot
 
 
 class AbinitLogFileTest(AbipyTest):
@@ -17,6 +17,7 @@ class AbinitLogFileTest(AbipyTest):
         log_path = abidata.ref_file("refs/abinit.log")
         with AbinitLogFile(log_path) as abilog:
             repr(abilog); str(abilog)
+            assert abilog.to_string(verbose=2)
             assert len(abilog.events) == 2
             if self.has_nbformat():
                 abilog.write_notebook(nbpath=self.get_tmpname(text=True))
@@ -30,7 +31,6 @@ class AbinitOutputTest(AbipyTest):
         with AbinitOutputFile(abo_path) as abo:
             repr(abo); str(abo)
             assert abo.to_string(verbose=2)
-
             assert abo.version == "8.0.6"
             assert abo.run_completed
             assert not abo.dryrun_mode
@@ -43,7 +43,26 @@ class AbinitOutputTest(AbipyTest):
             assert abo.initial_structure == abo.final_structure
             abo.diff_datasets(1, 2, dryrun=True)
 
-            print(abo.events)
+            # Test the parsing of dimension and spginfo
+            dims_dataset, spginfo_dataset = abo.get_dims_spginfo_dataset()
+            assert len(dims_dataset) == 2 and list(dims_dataset.keys()) == [1, 2]
+            dims1 = dims_dataset[1]
+            assert dims1["iscf"] == 7
+            assert dims1["nfft"] == 5832
+            self.assert_almost_equal(dims1["mem_per_proc_mb"], 3.045)
+            self.assert_almost_equal(dims1["wfk_size_mb"], 0.717)
+            self.assert_almost_equal(dims1["denpot_size_mb"], 0.046)
+            assert spginfo_dataset[1]["spg_symbol"] == "Fd-3m"
+            assert spginfo_dataset[1]["spg_number"] == 227
+            assert spginfo_dataset[1]["bravais"] == "Bravais cF (face-center cubic)"
+            dims2 = dims_dataset[2]
+            assert dims2["iscf"] == -2
+            assert dims2["n1xccc"] == 2501
+            self.assert_almost_equal(dims2["mem_per_proc_mb"], 1.901)
+            self.assert_almost_equal(dims2["wfk_size_mb"], 0.340)
+            self.assert_almost_equal(dims2["denpot_size_mb"], 0.046)
+
+            str(abo.events)
             gs_cycle = abo.next_gs_scf_cycle()
             assert gs_cycle is not None
             if self.has_matplotlib():
@@ -107,6 +126,42 @@ class AbinitOutputTest(AbipyTest):
 
             assert abo.initial_structure.abi_spacegroup is not None
 
+            # This to test get_dims_spginfo_dataset with one dataset.
+            dims_dataset, spg_dataset = abo.get_dims_spginfo_dataset()
+            assert len(dims_dataset) == 1
+            dims = dims_dataset[1]
+            assert dims["nsppol"] == 1
+            assert dims["nsym"] == 48
+            assert dims["nkpt"] == 29
+            self.assert_almost_equal(dims["mem_per_proc_mb"], 3.389)
+            self.assert_almost_equal(dims["wfk_size_mb"], 0.717)
+            self.assert_almost_equal(dims["denpot_size_mb"], 0.046)
+            assert spg_dataset[1]["spg_symbol"] == "Fd-3m"
+            assert spg_dataset[1]["spg_number"] == 227
+            assert spg_dataset[1]["bravais"] == "Bravais cF (face-center cubic)"
+
+    def test_abinit_output_with_ctrlm(self):
+        """Testing AbinitOutputFile with file containing CTRL+M char."""
+        test_dir = os.path.join(os.path.dirname(__file__), "..", "..", 'test_files')
+        with abilab.abiopen(os.path.join(test_dir, "ctrlM_run.abo")) as abo:
+            assert abo.version == "8.7.1"
+            assert abo.run_completed
+            assert abo.to_string(verbose=2)
+            assert abo.ndtset == 1
+            assert abo.initial_structure.abi_spacegroup is not None
+            assert abo.initial_structure.abi_spacegroup.spgid == 142
+            assert abo.proc0_cputime == 0.7
+            assert abo.proc0_walltime == 0.7
+            assert abo.overall_cputime == 0.7
+            assert abo.overall_walltime == 0.7
+
+            # Test the parsing of dimension and spginfo
+            dims_dataset, spginfo_dataset = abo.get_dims_spginfo_dataset()
+            dims1 = dims_dataset[1]
+            assert dims1["mqgrid"] == 5580
+            assert spginfo_dataset[1]["spg_symbol"] == "I4_1/acd"
+            assert spginfo_dataset[1]["spg_number"] == 142
+
     def test_all_outputs_in_tests(self):
         """
         Try to parse all Abinit output files inside the Abinit `tests` directory.
@@ -123,3 +178,18 @@ class AbinitOutputTest(AbipyTest):
         assert os.path.exists(abitests_dir)
         retcode = validate_output_parser(abitests_dir=abitests_dir)
         assert retcode == 0
+
+    def test_aborobot(self):
+        """Testing AboRobot."""
+        abo_paths = abidata.ref_files("refs/si_ebands/run.abo", "refs/gs_dfpt.abo")
+        with AboRobot.from_files(abo_paths) as robot:
+            repr(robot); str(robot)
+            assert robot.to_string(verbose=2)
+            assert robot._repr_html_()
+            dims = robot.get_dims_dataframe()
+            df = robot.get_dataframe(with_geo=True)
+            time_df = robot.get_time_dataframe()
+            self.assert_equal(time_df["overall_walltime"].values, [4.0, 26.1])
+
+            if self.has_nbformat():
+                robot.write_notebook(nbpath=self.get_tmpname(text=True))

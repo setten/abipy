@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """
-This script runs all the python scripts located in this directory 
+This script runs all the python scripts located in this directory
 """
+# pragma: no cover
 from __future__ import print_function, division, unicode_literals
 
 import sys
-import os 
+import os
 import argparse
 import shutil
 import tempfile
@@ -14,7 +15,7 @@ from subprocess import call, Popen
 from abipy.abilab import __version__
 
 
-def main():
+def main(): # pragma: no cover
     def str_examples():
         examples = """
           Usage example:\n\n
@@ -25,7 +26,7 @@ def main():
     def show_examples_and_exit(err_msg=None, error_code=1):
         """Display the usage of the script."""
         sys.stderr.write(str_examples())
-        if err_msg: 
+        if err_msg:
             sys.stderr.write("Fatal Error\n" + err_msg + "\n")
         sys.exit(error_code)
 
@@ -46,7 +47,7 @@ def main():
 
     options = parser.parse_args()
 
-    # loglevel is bound to the string value obtained from the command line argument. 
+    # loglevel is bound to the string value obtained from the command line argument.
     # Convert to upper case to allow the user to specify --loglevel=DEBUG or --loglevel=debug
     import logging
     numeric_level = getattr(logging, options.loglevel.upper(), None)
@@ -76,11 +77,11 @@ def main():
         ret = call(["python", script, "--workdir", workdir])
         retcode += ret
 
-        if ret != 0: 
+        if ret != 0:
             e = "python %s returned retcode !=0" % script
             print(e)
             errors.append(e)
-            if options.bail_on_failure: 
+            if options.bail_on_failure:
                 print("Exiting now since bail_on_failure")
                 break
 

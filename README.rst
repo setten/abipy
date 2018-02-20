@@ -1,53 +1,51 @@
 .. :Repository: https://github.com/abinit/abipy
 .. :Author: Matteo Giantomassi (http://github.com/abinit)
 
-.. image:: https://badge.fury.io/py/abipy.svg
-        :target: https://badge.fury.io/py/abipy
+.. list-table::
+    :stub-columns: 1
+    :widths: 10 90
 
-.. image:: https://travis-ci.org/abinit/abipy.svg?branch=develop
-        :target: https://travis-ci.org/abinit/abipy
-
-.. image:: https://coveralls.io/repos/github/abinit/abipy/badge.svg?branch=develop
-        :target: https://coveralls.io/github/abinit/abipy?branch=develop
-
-.. image:: https://img.shields.io/badge/license-GPL-blue.svg
-
+    * - Package
+      - |pypi-version| |download-with-anaconda| |supported-versions|
+    * - Continuous Integration
+      - |travis-status| |coverage-status| 
+    * - Documentation
+      - |docs-stable| |docs-devel| |launch-nbviewer| |launch-binder| 
 
 About
 =====
 
-AbiPy is a Python library to analyze the results produced by `ABINIT <http://www.abinit.org>`_,
+AbiPy is a Python_ library to analyze the results produced by Abinit_,
 an open-source program for the ab-initio calculations of the physical properties of materials
 within Density Functional Theory and Many-Body perturbation theory.
 It also provides tools to generate input files and workflows to automate
 ab-initio calculations and typical convergence studies.
-AbiPy is interfaced with `Pymatgen <http://www.pymatgen.org>`_ and this allows users to
-benefit from the different tools and python objects available in the pymatgen ecosystem
+AbiPy is interfaced with pymatgen_ and this allows users to
+benefit from the different tools and python objects available in the pymatgen ecosystem.
 
-Official documentation of the stable version available at the `abipy docpage`_.
+The official documentation of the stable version is available at the `abipy docpage`_.
+while the documentation of the **developmental** version is hosted on `github pages <http://abinit.github.io/abipy>`_.
 
-AbiPy can be used in conjunction with `matplotlib <http://matplotlib.org>`_, `pandas <http://pandas.pydata.org>`_,
-`ipython <https://ipython.org/index.html>`_ and `jupyter <http://jupyter.org/>`_
+AbiPy can be used in conjunction with matplotlib_, pandas_, scipy_, seaborn_, ipython_ and jupyter_ notebooks
 thus providing a powerful and user-friendly environment for data analysis and visualization.
-Check out the list of plotting scripts available in our
-`examples/plot <http://pythonhosted.org/abipy/examples/plot/index.html>`_ gallery.
-To learn more about the integration between jupyter and AbiPy, visit our collection of `notebooks
-<http://nbviewer.ipython.org/github/abinit/abipy/blob/master/abipy/examples/notebooks/index.ipynb>`_
-and the
-`AbiPy lessons <http://nbviewer.ipython.org/github/abinit/abipy/blob/master/abipy/examples/notebooks/lessons/index.ipynb>`_.
+Check out our `gallery of plotting scripts <http://abinit.github.io/abipy/gallery/index.html>`_
+and the `gallery of AbiPy workflows <http://abinit.github.io/abipy/flow_gallery/index.html>`_.
 
-AbiPy supports both Python 2.7 as well as Python >= 3.4.
-Python 2.7 is more intensively tested than py3k especially at the level of workflows
-so we still recommend py2.7 if you plan to run automatic calculations with AbiPy.
-
-Note that the majority of the post-processing tools available in AbiPy require output files in
-``netcdf`` format so we strongly suggest to compile Abinit with netcdf support
-(use ``--with_trio_flavor="netcdf-fallback"`` at configure time to activate the internal netcdf library,
-to link Abinit against an external netcdf library please consult the configuration examples
-provided by `abiconfig <https://github.com/abinit/abiconfig>`_.
+To learn more about the integration between jupyter_ and AbiPy, visit `our collection of notebooks
+<https://nbviewer.jupyter.org/github/abinit/abitutorials/blob/master/abitutorials/index.ipynb>`_
+or click the **Launch Binder** badge to start a Docker image with Abinit, AbiPy and all the other python dependencies
+required to run the code inside the jupyter notebooks.
+The notebook will be opened in your browser after building.
 
 AbiPy is free to use. However, we also welcome your help to improve this library by making your own contributions.
 Please report any bugs and issues at AbiPy's `Github page <https://github.com/abinit/abipy>`_.
+
+.. important::
+
+    Note that the majority of the post-processing tools available in AbiPy require output files in
+    netcdf_ format so we **strongly** suggest to compile Abinit with netcdf support
+    (use ``--with_trio_flavor="netcdf-fallback"`` at configure time to activate the internal netcdf library,
+    to link Abinit against an external netcdf library please consult the configuration examples provided by abiconfig_).
 
 Getting AbiPy
 =============
@@ -66,90 +64,102 @@ In this case, please consult the detailed installation instructions provided by 
 and then follow the instructions in `our howto <http://pythonhosted.org/abipy/installation.html>`_.
 
 The installation process is greatly simplified if you install the required 
-python packages through one of the following python distributions:
+python packages through `Anaconda <https://continuum.io/downloads>`_.
+We routinely use conda_ to test new developments with multiple Python versions and multiple virtual environments.
+The anaconda distribution already provides the most critical dependencies (matplotlib_, scipy_, numpy_, netcdf4-python_)
+in the form of pre-compiled packages that can be easily installed with e.g.::
 
-  * `Anaconda <https://continuum.io/downloads>`_
+    conda install numpy scipy netcdf4
 
-  * `Canopy <https://www.enthought.com/products/canopy>`_
+To install AbiPy with conda, download the `minconda installer <https://conda.io/miniconda.html>`_
+(select python3.6 and the version corresponding to your operating system).
+Create a new conda_ environment (``abipy3.6``) based on python3.6 with::
 
-We routinely use ``conda`` to test new developments with multiple versions of Python and multiple virtual environments.
-The anaconda distribution already provides the most critical dependencies (``matplotlib``, ``scipy``, ``numpy``)
-in the form of pre-compiled packages and ``netcdf4`` can be easily installed with::
+    conda create -n abipy3.6 python=3.6
 
-    conda install netcdf4
+and activate it with::
+
+    source activate abipy3.6
+
+Add ``conda-forge``, ``matsci`` and ``abinit`` to your channels with::
+
+    conda config --add channels conda-forge
+    conda config --add channels matsci
+    conda config --add channels abinit
+
+Finally, install AbiPy from the abinit-channel_ with::
+
+    conda install abipy -c abinit
+
+One of the big advantages of conda over pip is that conda can also install 
+libraries and executables written in Fortran.
+For example, one can easily install abinit inside the conda environment with::
+
+    conda install abinit -c abinit
+    abinit --version
 
 Additional information on the steps required to install AbiPy with anaconda are available
 in the `anaconda howto <http://pythonhosted.org/abipy/installation.html>`_.
-We are also working with the `Spack <https://github.com/LLNL/spack>`_ community
+
+We are also working with the spack_ community
 to provide packages for AbiPy and Abinit in order to facilitate the installation on large supercomputing centers.
-
----------------------
-Optional dependencies
----------------------
-
-Optional libraries that are required if you need certain features:
-
-``ipython``
-
-    Required to interact with the AbiPy/Pymatgen objects in the ipython shell
-    (strongly recommended, already provided by ``conda``).
-
-``jupyter`` and ``nbformat``
-
-    Required to generate jupyter notebooks.
-    Install these two packages with ``conda install jupyter nbformat`` or use ``pip``.
-    Recommended but you will also need a web browser to open the notebook.
-
-``wxPython`` and ``wxmplot`` for the GUI
-
-    Use ``conda install wxpython``
-    The directory ``abipy.gui.demos`` contains demos that can be used to test the installation.
-    of the GUI (run the script ``runall.py`` to have an overview of the different graphical interfaces).
 
 Developmental version
 ---------------------
 
-Getting the developmental version of AbiPy is easy. You can clone it from the 
-`github repository <https://github.com/abinit/abipy>`_ using this command:
+Getting the developmental version of AbiPy is easy. 
+You can clone the `github repository <https://github.com/abinit/abipy>`_ with::
 
-.. code-block:: console
+    git clone https://github.com/abinit/abipy
 
-   $ git clone https://github.com/abinit/abipy
+For pip, use::
 
-After cloning the repository, type::
+    pip install -r requirements.txt
+    pip install -r requirements-optional.txt
 
-    $ python setup.py install
+If you are using conda_,  create a new environment (``abipy3.6``) based on python3.6 with::
+
+    conda create -n abipy3.6 python=3.6
+    source activate abipy3.6
+
+Add ``conda-forge``, ``matsci`` and ``abinit`` to your channels with::
+
+    conda config --add channels conda-forge
+    conda config --add channels matsci
+    conda config --add channels abinit
+
+and install the AbiPy dependencies with::
+
+    conda install --file ./requirements.txt
+    conda install --file ./requirements-optional.txt
+
+Once the requirements have been installer (either with pip or conda), execute::
+
+    python setup.py install
 
 or alternately::
 
-    $ python setup.py develop
+    python setup.py develop
 
 to install the package in developmental mode 
 (this is the recommended approach, especially if you are planning to implement new features).
 
-The documentation of the **developmental** version is hosted on `github pages <http://abinit.github.io/abipy>`_.
-
 The Github version include test files for complete unit testing.
-To run the suite of unit tests, make sure you have ``pytest`` (recommended) 
-or ``nose`` installed and then just type::
+To run the suite of unit tests, make sure you have pytest_ installed and then type::
 
-    $ pytest
-
-or::
-
-    $ nosetests
+    pytest
 
 in the AbiPy root directory.
-Unit tests require two additional packages that can be installed with::
+Unit tests require ``scripttest`` that can be installed with::
 
-   $ pip install nose-exclude scripttest
+    pip install scripttest
 
 Note that several unit tests check the integration between AbiPy and Abinit. 
-In order to run the tests, you need a working set of Abinit executables and  
-a ``manager.yml`` configuration file.
-A pre-compiled sequential version of Abinit for Linux and OSx can be installed directly from the anaconda cloud with::
+In order to run the tests, you need a working set of Abinit executables and  a ``manager.yml`` configuration file.
+A pre-compiled sequential version of Abinit for Linux and OSx can be installed directly from the 
+abinit-channel_ with::
 
-    $ conda install abinit -c abinit
+    conda install abinit -c abinit
 
 For further information on the syntax of the configuration file, please consult the 
 `workflows <http://pythonhosted.org/abipy/workflows.html>`_ section.
@@ -172,7 +182,7 @@ Below is a brief description of the different directories found there:
 
   * `plot <http://pythonhosted.org/abipy/examples/plot/index.html>`_
 
-    scripts showing how to produce plots with ``matplotlib``
+    scripts showing how to produce plots with matplotlib_
 
   * `notebooks <http://nbviewer.ipython.org/github/abinit/abipy/blob/master/abipy/examples/notebooks/index.ipynb>`_
 
@@ -180,28 +190,88 @@ Below is a brief description of the different directories found there:
     (use ``jupyter notebook FILE`` to open the notebook in your browser,
     use ``conda install jupyter`` to install the package)
 
-The directory ``abipy/data/runs`` contains python scripts that can be used to automate typical ab-initio calculations.
+The directory ``abipy/examples/flows`` contains python scripts that can be used 
+to automate typical ab-initio calculations.
+
+Users are strongly encouraged to explore the detailed `API docs <http://pythonhosted.org/abipy/api/index.html>`_.
 
 Command line tools
 ------------------
 
 The following scripts can be invoked directly from the terminal:
 
-  * ``abiopen.py``
-  * ``abistruct.py``
-  * ``abicomp.py``
-  * ``abicheck.py``
+* ``abicheck.py``
+* ``abidoc.py``
+* ``abiopen.py``
+* ``abistruct.py``
+* ``abicomp.py``
+* ``abinp.py``
+* ``abirun.py``
+* ``abiview.py``
 
 For further information, please consult the `official documentation <http://pythonhosted.org/abipy/scripts.html>`_.
-
-Advanced Usage
---------------
-
-Users are strongly encouraged to explore the detailed `api docs <http://pythonhosted.org/abipy/api/index.html>`_.
 
 License
 =======
 
 AbiPy is released under the GNU GPL license. For more details see the LICENSE file.
 
+.. _Python: http://www.python.org/
+.. _Abinit: https://www.abinit.org
+.. _abinit-channel: https://anaconda.org/abinit
+.. _pymatgen: http://www.pymatgen.org
 .. _`abipy docpage` : http://pythonhosted.org/abipy
+.. _matplotlib: http://matplotlib.org
+.. _pandas: http://pandas.pydata.org
+.. _scipy: https://www.scipy.org/
+.. _seaborn: https://seaborn.pydata.org/
+.. _ipython: https://ipython.org/index.html
+.. _jupyter: http://jupyter.org/
+.. _netcdf: https://www.unidata.ucar.edu/software/netcdf/docs/faq.html#whatisit
+.. _abiconfig: https://github.com/abinit/abiconfig
+.. _conda: https://conda.io/docs/
+.. _netcdf4-python: http://unidata.github.io/netcdf4-python/
+.. _spack: https://github.com/LLNL/spack
+.. _pytest: https://docs.pytest.org/en/latest/contents.html
+.. _numpy: http://www.numpy.org/
+
+
+.. |pypi-version| image:: https://badge.fury.io/py/abipy.svg
+    :alt: PyPi version
+    :target: https://badge.fury.io/py/abipy
+
+.. |travis-status| image:: https://travis-ci.org/abinit/abipy.svg?branch=develop
+    :alt: Travis status
+    :target: https://travis-ci.org/abinit/abipy
+
+.. |coverage-status| image:: https://coveralls.io/repos/github/abinit/abipy/badge.svg?branch=develop
+    :alt: Coverage status
+    :target: https://coveralls.io/github/abinit/abipy?branch=develop
+
+.. |download-with-anaconda| image:: https://anaconda.org/abinit/abipy/badges/installer/conda.svg   
+    :alt: Download with Anaconda
+    :target: https://conda.anaconda.org/abinit
+
+.. |launch-binder| image:: https://mybinder.org/badge.svg 
+    :alt: Launch binder
+    :target: https://mybinder.org/v2/gh/abinit/abipy/develop
+
+.. |launch-nbviewer| image:: https://img.shields.io/badge/render-nbviewer-orange.svg
+    :alt: Launch nbviewer
+    :target: https://nbviewer.jupyter.org/github/abinit/abitutorials/blob/master/abitutorials/index.ipynb
+
+.. |supported-versions| image:: https://img.shields.io/pypi/pyversions/abipy.svg?style=flat
+    :alt: Supported versions
+    :target: https://pypi.python.org/pypi/abipy
+
+.. |requires| image:: https://requires.io/github/abinit/abipy/requirements.svg?branch=develop
+     :target: https://requires.io/github/abinit/abipy/requirements/?branch=develop
+     :alt: Requirements Status
+
+.. |docs-stable| image:: https://img.shields.io/badge/docs-stable_version-blue.svg
+     :alt: Documentation stable version
+     :target: http://pythonhosted.org/abipy/
+
+.. |docs-devel| image:: https://img.shields.io/badge/docs-devel_version-ff69b4.svg
+     :alt: Documentation development version
+     :target: http://abinit.github.io/abipy

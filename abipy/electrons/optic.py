@@ -5,48 +5,15 @@ Objects to read and analyze optical properties stored in the optic.nc file produ
 from __future__ import print_function, division, unicode_literals, absolute_import
 
 import numpy as np
-import pymatgen.core.units as units
+import abipy.core.abinit_units as abu
 
 from collections import OrderedDict
 from monty.string import marquee, list_strings
 from monty.functools import lazy_property
 from abipy.core.mixins import AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, NotebookWriter
-from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt, set_axlims, data_from_cplx_mode
+from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt, get_axarray_fig_plt, set_axlims, data_from_cplx_mode
 from abipy.abio.robots import Robot
 from abipy.electrons.ebands import ElectronsReader, RobotWithEbands
-
-
-def s2itup(comp):
-    """
-    Convert string in the form `xx`, `xyz` into tuple of two (three) indices
-    that can be used to slice susceptibility tensors (numpy array).
-
-    >>> assert s2itup("yy") == (1, 1)
-    >>> assert s2itup("xyz") == (0, 1, 2)
-    """
-    d = {"x": 0, "y": 1, "z": 2}
-    comp = str(comp).strip()
-    if len(comp) == 2:
-        return d[comp[0]], d[comp[1]]
-    elif len(comp) == 3:
-        return d[comp[0]], d[comp[1]], d[comp[2]]
-    else:
-        raise ValueError("Expecting component in the form `xy` or `xyz` but got `%s`" % comp)
-
-
-def itup2s(t):
-    """
-    Convert tuple of 2 (3) integers into string in the form `xx` (`xyz`).
-    Assume C-indexing e.g. 0 --> x
-
-    >>> assert itup2s((0, 1)) == "xy"
-    >>> assert itup2s((0, 1, 2)) == "xyz"
-    """
-    if not isinstance(t, tuple) and len(t) not in (2, 3):
-        raise TypeError("Expecting tuple of len 2 or 3, got %s" % str(t))
-    d = {0: "x", 1: "y", 2: "z"}
-    return "".join(d[i] for i in t)
-
 
 ALL_CHIS = OrderedDict([
     ("linopt", {
@@ -130,7 +97,7 @@ LINEPS_WHAT2EFUNC = dict(
 class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, NotebookWriter):
     """
     This file contains the results produced by optic. Provides methods to plot optical
-    properties and susceptibilty tensors. Used by OpticRobot to analyze multiple files.
+    properties and susceptibilty tensors. Used by :class:`OpticRobot` to analyze multiple files.
 
     Usage example:
 
@@ -139,11 +106,14 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
         with OpticNcFile("out_optic.nc") as optic:
             optic.ebands.plot()
             optic.plot()
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: OpticNcFile
     """
 
     @classmethod
     def from_file(cls, filepath):
-        """Initialize the object from a Netcdf file."""
+        """Initialize the object from a netcdf file."""
         return cls(filepath)
 
     def __init__(self, filepath):
@@ -184,11 +154,11 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
 
         app(marquee("Optic calculation", mark="="))
         # Show Optic variables.
-        app("broadening: %s [Ha], %.3f [eV]" % (self.broadening, self.broadening * units.Ha_to_eV))
-        app("scissor: %s [Ha], %.3f [eV]" % (self.scissor, self.scissor * units.Ha_to_eV))
-        app("tolerance: %s [Ha], %.3f [eV]" % (self.tolerance, self.tolerance * units.Ha_to_eV))
-        app("maxomega: %s [Ha], %.3f [eV]" % (self.maxomega, self.maxomega * units.Ha_to_eV))
-        app("domega: %s [Ha], %.3f [eV]" % (self.domega, self.domega * units.Ha_to_eV))
+        app("broadening: %s [Ha], %.3f [eV]" % (self.broadening, self.broadening * abu.Ha_eV))
+        app("scissor: %s [Ha], %.3f [eV]" % (self.scissor, self.scissor * abu.Ha_eV))
+        app("tolerance: %s [Ha], %.3f [eV]" % (self.tolerance, self.tolerance * abu.Ha_eV))
+        app("maxomega: %s [Ha], %.3f [eV]" % (self.maxomega, self.maxomega * abu.Ha_eV))
+        app("domega: %s [Ha], %.3f [eV]" % (self.domega, self.domega * abu.Ha_eV))
         app("do_antiresonant %s, do_ep_renorm %s" % (self.do_antiresonant, self.do_ep_renorm))
         app("Number of temperatures: %d" % self.reader.ntemp)
 
@@ -206,13 +176,28 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
 
     @lazy_property
     def ebands(self):
-        """:class:`ElectronBands` object."""
+        """|ElectronBands| object."""
         return self.reader.read_ebands()
 
     @property
     def structure(self):
-        """:class:`Structure` object."""
+        """|Structure| object."""
         return self.ebands.structure
+
+    @lazy_property
+    def has_linopt(self):
+        """True if the ncfile contains Second Harmonic Generation tensor."""
+        return "linopt" in self.reader.computed_components
+
+    @lazy_property
+    def has_shg(self):
+        """True if the ncfile contains Second Harmonic Generation tensor."""
+        return "shg" in self.reader.computed_components
+
+    @lazy_property
+    def has_leo(self):
+        """True if the ncfile contains the Linear Electro-optic tensor"""
+        return "leo" in self.reader.computed_components
 
     #@lazy_property
     #def xc(self):
@@ -222,6 +207,12 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
     def close(self):
         """Close the file."""
         self.reader.close()
+
+    @lazy_property
+    def params(self):
+        """:class:`OrderedDict` with parameters that might be subject to convergence studies."""
+        od = self.get_ebands_params()
+        return od
 
     @staticmethod
     def get_linopt_latex_label(what, comp):
@@ -252,7 +243,7 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
 
     @add_fig_kwargs
     def plot_linear_epsilon(self, components="all", what="im", itemp=0,
-                            ax=None, xlims=None, with_xlabel=True, label=None, **kwargs):
+                            ax=None, xlims=None, with_xlabel=True, label=None, fontsize=12, **kwargs):
         """
         Plot components of the linear dielectric function.
 
@@ -261,56 +252,56 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
                 "all" if all components available on file should be plotted on the same ax.
             what: quantity to plot. "re" for real part, "im" for imaginary. Accepts also "abs", "angle".
             itemp: Temperature index.
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used.
             with_xlabel: True if x-label should be added.
             label: True to add legend label to each curve.
+            fontsize: Legend and label fontsize.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         comp2eps = self.reader.read_lineps(components, itemp=itemp)
 
         ax, fig, plt = get_ax_fig_plt(ax=ax)
         for comp, eps in comp2eps.items():
-             values = LINEPS_WHAT2EFUNC[what](eps)
-             # Note: I'm skipping the first point at w=0 because optic does not compute it!
-             # The same trick is used in the other plots.
-             ax.plot(self.wmesh[1:], values[1:],
-                     label=self.get_linopt_latex_label(what, comp) if label is None else label)
+            values = LINEPS_WHAT2EFUNC[what](eps)
+            # Note: I'm skipping the first point at w=0 because optic does not compute it!
+            # The same trick is used in the other plots.
+            ax.plot(self.wmesh[1:], values[1:],
+                    label=self.get_linopt_latex_label(what, comp) if label is None else label)
 
         ax.grid(True)
         if with_xlabel: ax.set_xlabel('Photon Energy [eV]')
         set_axlims(ax, xlims, "x")
-        ax.legend(loc="best")
+        ax.legend(loc="best", fontsize=fontsize, shadow=True)
 
         return fig
 
     @add_fig_kwargs
     def plot_linopt(self, select="all", itemp=0, xlims=None, **kwargs):
         """
-        Subplots with all linear optic quantities selected by `select` at temperature `itemp`
+        Subplots with all linear optic quantities selected by ``select`` at temperature ``itemp``.
 
         Args:
             select:
             itemp: Temperature index.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used.
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                or scalar e.g. ``left``. If left (right) is None, default values are used.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         key = "linopt"
         if not self.reader.computed_components[key]: return None
         if select == "all": select = list(LINEPS_WHAT2EFUNC.keys())
         select = list_strings(select)
 
-        import matplotlib.pyplot as plt
-        fig, axmat = plt.subplots(nrows=len(select), ncols=1, sharex=True, sharey=False, squeeze=True)
+        nrows, ncols = len(select), 1
+        ax_mat, fig, plt = get_axarray_fig_plt(None, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=False, squeeze=True)
 
         components = self.reader.computed_components[key]
-        for i, (what, ax) in enumerate(zip(select, axmat)):
+        for i, (what, ax) in enumerate(zip(select, ax_mat)):
             self.plot_linear_epsilon(what=what, itemp=itemp, components=components,
                                      ax=ax, xlims=xlims, with_xlabel=(i == len(select) - 1),
                                      show=False)
@@ -318,7 +309,7 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
 
     @add_fig_kwargs
     def plot_chi2(self, key, components="all", what="abs", itemp=0, decompose=False,
-                  ax=None, xlims=None, with_xlabel=True, label=None, **kwargs):
+                  ax=None, xlims=None, with_xlabel=True, label=None, fontsize=12, **kwargs):
         """
         Low-level function to plot chi2 tensor.
 
@@ -329,14 +320,14 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
             what: quantity to plot. "re" for real part, "im" for imaginary, Accepts also "abs", "angle".
             itemp: Temperature index.
             decompose: True to plot individual contributions.
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used.
             with_xlabel: True to add x-label.
             label: True to add legend label to each curve.
+            fontsize: Legend and label fontsize.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         if not self.reader.computed_components[key]: return None
         comp2terms = self.reader.read_tensor3_terms(key, components, itemp=itemp)
@@ -353,23 +344,23 @@ class OpticNcFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, No
         ax.grid(True)
         if with_xlabel: ax.set_xlabel('Photon Energy [eV]')
         set_axlims(ax, xlims, "x")
-        ax.legend(loc="best")
+        ax.legend(loc="best", fontsize=fontsize, shadow=True)
 
         return fig
 
     @add_fig_kwargs
     def plot_shg(self, **kwargs):
         """Plot Second Harmonic Generation. See plot_chi2 for args supported."""
-        return self.plot_chi2(key="shg", **kwargs)
+        return self.plot_chi2(key="shg", show=False, **kwargs)
 
     @add_fig_kwargs
     def plot_leo(self, **kwargs):
         """Plot Linear Electro-optic. See plot_chi2 for args supported."""
-        return self.plot_chi2(key="leo", **kwargs)
+        return self.plot_chi2(key="leo", show=False, **kwargs)
 
     def write_notebook(self, nbpath=None):
         """
-        Write an ipython notebook to nbpath. If nbpath is None, a temporay file in the current
+        Write a jupyter_ notebook to ``nbpath``. If nbpath is None, a temporay file in the current
         working directory is created. Return path to the notebook.
         """
         nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)
@@ -395,6 +386,9 @@ class OpticReader(ElectronsReader):
     """
     This object reads the results stored in the optic.nc file
     It provides helper function to access the most important quantities.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: OpticReader
     """
     def __init__(self, filepath):
         super(OpticReader, self).__init__(filepath)
@@ -416,7 +410,7 @@ class OpticReader(ElectronsReader):
                     raise NotImplementedError("rank %s" % info["rank"])
 
             self.computed_ids[chiname] = ids
-            self.computed_components[chiname] = [itup2s(it) for it in ids]
+            self.computed_components[chiname] = [abu.itup2s(it) for it in ids]
 
     def read_lineps(self, components, itemp=0):
         """
@@ -452,7 +446,7 @@ class OpticReader(ElectronsReader):
             itemp: Temperature index.
 
         Return:
-            OrderedDict mapping cartesian components e.g. "xyz" to data dictionary.
+            :class:`OrderedDict` mapping cartesian components e.g. "xyz" to data dictionary.
             Individual entries are listed in ALL_CHIS[key]["terms"]
         """
         # arrays have Fortran shape [two, nomega, num_comp, ntemp]
@@ -478,6 +472,9 @@ class OpticReader(ElectronsReader):
 class OpticRobot(Robot, RobotWithEbands):
     """
     This robot analyzes the results contained in multiple optic.nc files.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: OpticRobot
     """
     EXT = "OPTIC"
 
@@ -488,7 +485,7 @@ class OpticRobot(Robot, RobotWithEbands):
         available in each file. Use keys from ALL_CHIS.
         """
         od = OrderedDict()
-        for ncfile in self.ncfiles:
+        for ncfile in self.abifiles:
             for chiname in ALL_CHIS:
                 comps = ncfile.reader.computed_components[chiname]
                 if chiname not in od:
@@ -503,7 +500,7 @@ class OpticRobot(Robot, RobotWithEbands):
                                 sortby="nkpt", itemp=0, xlims=None, **kwargs):
         """
         Plot the convergence of the dielectric function tensor with respect to
-        parameter defined by `sortby`.
+        parameter defined by ``sortby``.
 
         Args:
             components: List of cartesian tensor components to plot e.g. ["xx", "xy"].
@@ -515,23 +512,23 @@ class OpticRobot(Robot, RobotWithEbands):
                 If string, it's assumed that the ncfile has an attribute with the same name and getattr is invoked.
                 If callable, the output of callable(ncfile) is used.
             itemp: Temperature index.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used.
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         # Build grid plot: computed tensors along the rows, what_list along columns.
         key = "linopt"
         components = self.computed_components_intersection[key]
-        import matplotlib.pyplot as plt
-        fig, axmat = plt.subplots(nrows=len(components), ncols=len(what_list),
-                                  sharex=True, sharey=False, squeeze=False)
+
+        nrows, ncols = len(components), len(what_list)
+        ax_mat, fig, plt = get_axarray_fig_plt(None, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=False, squeeze=False)
 
         label_ncfile_param = self.sortby(sortby)
         for i, comp in enumerate(components):
             for j, what in enumerate(what_list):
-                ax = axmat[i, j]
+                ax = ax_mat[i, j]
                 for ifile, (label, ncfile, param) in enumerate(label_ncfile_param):
 
                     ncfile.plot_linear_epsilon(components=comp, what=what, itemp=itemp, ax=ax,
@@ -574,25 +571,25 @@ class OpticRobot(Robot, RobotWithEbands):
                 Accepts also "abs", "angle".
             sortby: Define the convergence parameter, sort files and produce plot labels. Can be None, string or function.
                 If None, no sorting is performed.
-                If string, it's assumed that the ncfile has an attribute with the same name and getattr is invoked.
+                If string, it's assumed that the ncfile has an attribute with the same name and ``getattr`` is invoked.
                 If callable, the output of callable(ncfile) is used.
             decompose: True to plot individual contributions.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used.
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                or scalar e.g. ``left``. If left (right) is None, default values are used.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         # Build grid plot: computed tensors along the rows, what_list along columns.
         components = self.computed_components_intersection[key]
-        import matplotlib.pyplot as plt
-        fig, axmat = plt.subplots(nrows=len(components), ncols=len(what_list),
-                                  sharex=True, sharey=False, squeeze=False)
+
+        nrows, ncols = len(components), len(what_list)
+        ax_mat, fig, plt = get_axarray_fig_plt(None, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=False, squeeze=False)
 
         label_ncfile_param = self.sortby(sortby)
         for i, comp in enumerate(components):
             for j, what in enumerate(what_list):
-                ax = axmat[i, j]
+                ax = ax_mat[i, j]
                 for ifile, (label, ncfile, param) in enumerate(label_ncfile_param):
 
                     ncfile.plot_chi2(key=key, components=comp, what=what, itemp=itemp, decompose=decompose,
@@ -610,7 +607,7 @@ class OpticRobot(Robot, RobotWithEbands):
 
     def write_notebook(self, nbpath=None):
         """
-        Write a jupyter notebook to nbpath. If nbpath is None, a temporay file in the current
+        Write a jupyter_ notebook to nbpath. If ``nbpath`` is None, a temporay file in the current
         working directory is created. Return path to the notebook.
         """
         nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)

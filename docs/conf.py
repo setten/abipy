@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import, unicode_literals, divisi
 
 import sys
 import os
+import shutil
 #import matplotlib as mpl
 #mpl.use("Agg")
 
@@ -15,12 +16,24 @@ import os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
-sys.path.insert(0, os.path.abspath('../abipy'))
-#sys.path.insert(0, os.path.abspath('sphinxext'))
+ABIPY_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+#print(ABIPY_ROOT)
+
+sys.path.insert(0, ABIPY_ROOT)
+
 
 import imp
-mod_name = "../abipy/core/release.py"
+mod_name = os.path.join(ABIPY_ROOT, "abipy", "core", "release.py")
 relmod = imp.load_source(mod_name, mod_name)
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True' and os.environ.get("READTHEDOCS_PROJECT")
+if on_rtd:
+    print("Preparing execution on READTHEDOCS server...")
+    os.makedirs(os.path.expanduser("~/.abinit/abipy"))
+    shutil.copy(os.path.join(ABIPY_ROOT, "data", "managers", "travis_scheduler.yml"),
+                os.path.expanduser("~/.abinit/abipy/scheduler.yml"))
+    shutil.copy(os.path.join(ABIPY_ROOT, "data", "managers", "travis_manager.yml"),
+                os.path.expanduser("~/.abinit/abipy/manager.yml"))
 
 # -- General configuration -----------------------------------------------------
 
@@ -32,11 +45,9 @@ relmod = imp.load_source(mod_name, mod_name)
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
-    #'sphinx.ext.coverage',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
-    'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
@@ -46,32 +57,58 @@ extensions = [
     'sphinxcontrib.programoutput',
     'sphinx_gallery.gen_gallery',
     "sphinxarg.ext",         # CLI doc
+    'sphinxcontrib.bibtex',
+    "releases",
     #'nbsphinx',
+    #'sphinx.ext.coverage',
+
 ]
 
 # Add any Sphinx extension module names here, as strings. They can
 # be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import matplotlib
 extensions += [
-    'matplotlib.sphinxext.mathmpl',
     'matplotlib.sphinxext.only_directives',
     'matplotlib.sphinxext.plot_directive',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
 ]
 
+# Add local extensions (not available on PyPi)
+sys.path.insert(0, os.path.join(ABIPY_ROOT, "docs", "my_extensions"))
+extensions += [
+    'youtube',
+]
+
+from sphinx_gallery.sorting import FileNameSortKey, NumberOfCodeLinesSortKey
 sphinx_gallery_conf = {
     # path to your examples scripts
-    'examples_dirs': '../abipy/examples/plot',
+    'examples_dirs': ["../abipy/examples/plot", "../abipy/examples/flows",],
     # path where to save gallery generated examples
-    'gallery_dirs': 'gallery',
-    #'filename_pattern': '/plot_',
+    'gallery_dirs': ["gallery", "flow_gallery",],
+    'filename_pattern': "(/plot_*|/run_*)",
+    'default_thumb_file': '_static/abipy_logo.png',
+    'within_subsection_order': NumberOfCodeLinesSortKey,
     'backreferences_dir': False,
     #'find_mayavi_figures': True,
     'reference_url': {
-        # The module you locally document uses None
-        'abipy': None,
-    }
+        'abipy': None,  # The module you locally document uses None
+        'numpy': 'https://docs.scipy.org/doc/numpy/',
+        'matplotlib': 'https://matplotlib.org',
+        'pandas': "http://pandas-docs.github.io/pandas-docs-travis/",
+        "pymatgen": "http://pymatgen.org/",
+    },
+    # TODO
+    #https://sphinx-gallery.github.io/advanced_configuration.html#generate-binder-links-for-gallery-notebooks-experimental
+    #'binder': {
+    #    'org': 'abinit',
+    #    #'repo': 'abipy',
+    #    #'repo': 'https://github.com/abinit/abipy',
+    #    "repo": "http://abinit.github.io/abipy/",
+    #    'url': 'https://mybinder.org', # URL serving binders (e.g. mybinder.org)
+    #    'branch': 'develop',  # Can also be a tag or commit hash
+    #    'dependencies': '../binder/environment.yml' # list_of_paths_to_dependency_files>'
+    # },
 }
 
 # Generate the API documentation when building
@@ -115,7 +152,7 @@ release = relmod.__version__
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', '**.ipynb_checkpoints']
+exclude_patterns = ['_build', '**.ipynb_checkpoints', "links.rst"]
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 #default_role = None
@@ -217,6 +254,17 @@ html_theme_options = {
     # Values: "3" (default) or "2" (in quotes)
     'bootstrap_version': "3",
 }
+
+
+def setup(app):
+    """
+    Sphinx automatically calls your setup function defined in "conf.py" during the build process for you.
+    There is no need to, nor should you, call this function directly in your code.
+    http://www.sphinx-doc.org/en/stable/extdev/appapi.html
+    """
+    # Add custom css in _static
+    app.add_stylesheet("my_style.css")
+
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -358,14 +406,58 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/', None),
+    'python': ('https://docs.python.org/{.major}'.format(sys.version_info), None),
     'numpy': ('https://docs.scipy.org/doc/numpy/', None),
     "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
     'pandas': ("http://pandas-docs.github.io/pandas-docs-travis/", None),
-    'matplotlib': ('http://matplotlib.org/', None),
+    'matplotlib': ('https://matplotlib.org/', None),
+    "monty": ("http://pythonhosted.org/monty/", None),
     "pymatgen": ("http://pymatgen.org/", None),
+    'mayavi': ('http://docs.enthought.com/mayavi/mayavi', None),
 }
 
 # If true, Sphinx will warn about all references where the target cannot be found.
 # Default is False. You can activate this mode temporarily using the -n command-line switch.
 #nitpicky = True
+
+# A string of reStructuredText that will be included at the end of every source file that is read.
+# This is the right place to add substitutions that should be available in every file.
+with open("links.rst", "rt") as fh:
+    rst_epilog = fh.read()
+
+# http://www.sphinx-doc.org/en/stable/ext/extlinks.html#confval-extlinks
+# :abivar:`ecut`
+#ABINIT_DOCS_URL =
+#extlinks = {'
+#    "abivar" : (ABINIT_DOC_ULRS + '/abinit/%s', "")
+#    api_url' : (settings.BASE_URL + '%s', settings.BASE_URL)
+#}
+
+autodoc_member_order = "bysource"
+
+#'members', 'undoc-members', 'private-members', 'special-members', 'inherited-members' and 'show-inheritance'.
+#autodoc_default_flags = ["show-inheritance", "inherited-members", "special-members"]
+
+# From https://sphinxcontrib-bibtex.readthedocs.io/en/latest/usage.html#custom-formatting-sorting-and-labelling
+# pybtex provides a very powerful way to create and register new styles, using setuptools entry points,
+# as documented here: http://docs.pybtex.org/api/plugins.html
+
+#from pybtex.style.formatting.unsrt import Style as UnsrtStyle
+#from pybtex.style.template import toplevel # ... and anything else needed
+#from pybtex.plugin import register_plugin
+
+#class MyStyle(UnsrtStyle):
+#    def format_label(self, entry):
+#        print("hello")
+#        return "APA"
+#
+#    #def format_XXX(self, e):
+#    #    template = toplevel [
+#    #        # etc.
+#    #    ]
+#    #    return template.format_data(e)
+
+#register_plugin('pybtex.style.formatting', 'mystyle', MyStyle)
+
+# This is for releases http://releases.readthedocs.io/en/latest/usage.html
+releases_github_path = "abinit/abipy"

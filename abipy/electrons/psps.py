@@ -5,7 +5,8 @@ from __future__ import print_function, division, unicode_literals, absolute_impo
 import numpy as np
 
 from monty.bisect import find_gt
-from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt
+from monty.functools import lazy_property
+from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt, get_axarray_fig_plt
 from abipy.flowtk import Pseudo
 from abipy.iotools import ETSF_Reader
 from abipy.core.mixins import AbinitNcFile
@@ -78,7 +79,13 @@ class PspsFile(AbinitNcFile):
         self.reader = r = PspsReader(filepath)
 
     def close(self):
+        """Close the file."""
         self.reader.close()
+
+    @lazy_property
+    def params(self):
+        """:class:`OrderedDict` with parameters that might be subject to convergence studies."""
+        return {}
 
     @add_fig_kwargs
     def plot(self, **kwargs):
@@ -88,10 +95,8 @@ class PspsFile(AbinitNcFile):
         Args:
             ecut_ffnl: Max cutoff energy for ffnl plot (optional)
 
-        Return: matplotlb Figure
+        Return: |matplotlib-Figure|
         """
-        import matplotlib.pyplot as plt
-
         methods = [
             "plot_tcore_rspace",
             "plot_tcore_qspace",
@@ -99,7 +104,8 @@ class PspsFile(AbinitNcFile):
             "plot_vlocq",
         ]
 
-        fig, ax_list = plt.subplots(nrows=2, ncols=2, squeeze=True)
+        ax_list, fig, plt = get_axarray_fig_plt(None, nrows=2, ncols=2,
+                                                sharex=False, sharey=False, squeeze=True)
 
         ecut_ffnl = kwargs.pop("ecut_ffnl", None)
         for m, ax in zip(methods, ax_list.ravel()):
@@ -113,14 +119,13 @@ class PspsFile(AbinitNcFile):
         Plot the model core and its derivatives in real space.
 
         Args:
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
             ders: Tuple used to select the derivatives to be plotted.
             rmax: Max radius for plot in Bohr. None is full grid is wanted.
 
-        Returns:
-            matplotlib figure.
+        Returns: |matplotlib-Figure|
         """
-        ax, fig, plt = get_ax_fig_plt(ax)
+        ax, fig, plt = get_ax_fig_plt(ax=ax)
 
         linewidth = kwargs.pop("linewidth", 2.0)
         rmeshes, coresd = self.reader.read_coresd(rmax=rmax)
@@ -148,14 +153,13 @@ class PspsFile(AbinitNcFile):
         Plot the model core in q space
 
         Args:
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
             ders: Tuple used to select the derivatives to be plotted.
             with_qn:
 
-        Returns:
-            matplotlib figure.
+        Returns: |matplotlib-Figure|
         """
-        ax, fig, plt = get_ax_fig_plt(ax)
+        ax, fig, plt = get_ax_fig_plt(ax=ax)
 
         color = kwargs.pop("color", "black")
         linewidth = kwargs.pop("linewidth", 2.0)
@@ -199,14 +203,13 @@ class PspsFile(AbinitNcFile):
         Plot the local part of the pseudopotential in q space.
 
         Args:
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
             ders: Tuple used to select the derivatives to be plotted.
             with_qn:
 
-        Returns:
-            matplotlib figure.
+        Returns: |matplotlib-Figure|
         """
-        ax, fig, plt = get_ax_fig_plt(ax)
+        ax, fig, plt = get_ax_fig_plt(ax=ax)
 
         color = kwargs.pop("color", "black")
         linewidth = kwargs.pop("linewidth", 2.0)
@@ -242,18 +245,17 @@ class PspsFile(AbinitNcFile):
     @add_fig_kwargs
     def plot_ffspl(self, ax=None, ecut_ffnl=None, ders=(0,), with_qn=0, with_fact=False, **kwargs):
         """
-        Plot the nonlocal part of the pseudopotential in q space.
+        Plot the nonlocal part of the pseudopotential in q-space.
 
         Args:
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
             ecut_ffnl: Max cutoff energy for ffnl plot (optional)
             ders: Tuple used to select the derivatives to be plotted.
             with_qn:
 
-        Returns:
-            matplotlib figure.
+        Returns: |matplotlib-Figure|
         """
-        ax, fig, plt = get_ax_fig_plt(ax)
+        ax, fig, plt = get_ax_fig_plt(ax=ax)
 
         color = kwargs.pop("color", "black")
         linewidth = kwargs.pop("linewidth", 2.0)
@@ -301,14 +303,13 @@ class PspsFile(AbinitNcFile):
 
     @add_fig_kwargs
     def compare(self, others, **kwargs):
-        """Produce matplotlib plot comparing self with another list of pseudos `others`."""
+        """Produce matplotlib plot comparing self with another list of pseudos ``others``."""
         if not isinstance(others, (list, tuple)):
             others = [others]
 
-        import matplotlib.pyplot as plt
-        fig, ax_list = plt.subplots(nrows=2, ncols=2, squeeze=True)
+        ax_list, fig, plt = get_axarray_fig_plt(None, nrows=2, ncols=2,
+                                                sharex=False, sharey=False, squeeze=True)
         ax_list = ax_list.ravel()
-
         #fig.suptitle("%s vs %s" % (self.basename, ", ".join(o.basename for o in others)))
 
         def mkcolor(count):
@@ -469,10 +470,10 @@ class PspsReader(ETSF_Reader):
         for ilmn in range(self.lmnmax):
             iln = indlmn_type[ilmn, 4]
             if iln > iln0:
-              iln0 = iln
-              l = indlmn_type[ilmn, 0]  # l
-              n = indlmn_type[ilmn, 2]  # n
-              ln_list.append((l, n))
+                iln0 = iln
+                l = indlmn_type[ilmn, 0]  # l
+                n = indlmn_type[ilmn, 2]  # n
+                ln_list.append((l, n))
 
         return ln_list
 

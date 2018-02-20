@@ -2,7 +2,7 @@
 This module provides interfaces with the Materials Project REST API v2 to enable
 the creation of data structures and pymatgen objects using Materials Project data.
 """
-from __future__ import division, unicode_literals, print_function, division
+from __future__ import unicode_literals, print_function, division
 
 import sys
 
@@ -53,11 +53,18 @@ def get_mprester(api_key=None, endpoint=None):
 
 
 class MyMPRester(MPRester):
+    """
+    Subclass Materials project Rester.
+    See :cite:`Jain2013,Ong2015`.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: MyMPRester
+    """
     Error = MPRestError
 
     def get_phasediagram_results(self, elements):
         """
-        Contact the materials project database, fetch entries and build `PhaseDiagramResults` instance.
+        Contact the materials project database, fetch entries and build :class:``PhaseDiagramResults`` instance.
 
         Args:
             elements: List of chemical elements.
@@ -73,6 +80,8 @@ class PhaseDiagramResults(object):
     Inspired to:
 
         https://anaconda.org/matsci/plotting-and-analyzing-a-phase-diagram-using-the-materials-api/notebook
+
+    See also: :cite:`Ong2008,Ong2010`
     """
     def __init__(self, entries):
         self.entries = entries
@@ -84,7 +93,7 @@ class PhaseDiagramResults(object):
         self.mpids = [e.entry_id for e in entries]
 
         # Create phase diagram.
-        from pymatgen.phasediagram.maker import PhaseDiagram
+        from pymatgen.analysis.phase_diagram import PhaseDiagram
         self.phasediagram = PhaseDiagram(self.entries)
 
     def plot(self, show_unstable=True, show=True):
@@ -100,25 +109,19 @@ class PhaseDiagramResults(object):
         Return:
             plotter object.
         """
-        try:
-            from pymatgen.analysis.phase_diagram import PDPlotter
-        except ImportError:
-            from pymatgen.phasediagram.plotter import PDPlotter
+        from pymatgen.analysis.phase_diagram import PDPlotter
         plotter = PDPlotter(self.phasediagram, show_unstable=show_unstable)
         if show:
             plotter.show()
         return plotter
 
     @lazy_property
-    def table(self):
+    def dataframe(self):
         """Pandas dataframe with the most important results."""
-        # TODO: Use PhaseDiagram but enforce new pymatgen first.
-        from pymatgen.phasediagram.analyzer import PDAnalyzer
-        pda = PDAnalyzer(self.phasediagram)
         rows = []
         for e in self.entries:
             d = e.structure.get_dict4pandas(with_spglib=True)
-            decomp, ehull = pda.get_decomp_and_e_above_hull(e)
+            decomp, ehull = self.phasediagram.get_decomp_and_e_above_hull(e)
 
             rows.append(OrderedDict([
                 ("Materials ID", e.entry_id),
@@ -140,7 +143,7 @@ class PhaseDiagramResults(object):
             file: Output stream.
             verbose: Verbosity level.
         """
-        print_dataframe(self.table, file=file)
+        print_dataframe(self.dataframe, file=file)
         if verbose:
             from abipy.core.structure import dataframes_from_structures
             dfs = dataframes_from_structures(self.structures, index=self.mpids, with_spglib=with_spglib)
@@ -175,10 +178,10 @@ class DatabaseStructures(NotebookWriter):
     __nonzero__ = __bool__  # py2
 
     def filter_by_spgnum(self, spgnum):
-         """Filter structures by space group number. Return new MpStructures object."""
-         inds = [i for i, s in enumerate(self.structures) if s.get_space_group_info()[1] == int(spgnum)]
-         new_data = None if self.data is None else [self.data[i] for i in inds]
-         return self.__class__([self.structures[i] for i in inds], [self.ids[i] for i in inds], data=new_data)
+        """Filter structures by space group number. Return new MpStructures object."""
+        inds = [i for i, s in enumerate(self.structures) if s.get_space_group_info()[1] == int(spgnum)]
+        new_data = None if self.data is None else [self.data[i] for i in inds]
+        return self.__class__([self.structures[i] for i in inds], [self.ids[i] for i in inds], data=new_data)
 
     def add_entry(self, structure, entry_id, data_dict=None):
         """
@@ -217,22 +220,31 @@ class DatabaseStructures(NotebookWriter):
         """
         Print pandas dataframe, structures using format `fmt`, and data to file `file`.
         `fmt` is automaticall set to `cif` if structure is disordered.
+        Set fmt to None or empty string to disable structure output.
         """
         print("\n# Found %s structures in %s database (use `verbose` to get further info)\n"
                 % (len(self.structures), self.dbname), file=file)
 
-        if self.table is not None: print_dataframe(self.table, file=file)
+        if self.dataframe is not None: print_dataframe(self.dataframe, file=file)
         if verbose and self.data is not None: pprint(self.data, stream=file)
 
-        for i, structure in enumerate(self.structures):
-            print(" ", file=file)
-            print(marquee("%s input for %s" % (fmt, self.ids[i]), mark="#"), file=file)
-            print("# " + structure.spget_summary(verbose=verbose).replace("\n", "\n# ") + "\n", file=file)
-            if not structure.is_ordered:
-                print(structure.convert(fmt="cif"), file=file)
-            else:
-                print(structure.convert(fmt=fmt), file=file)
-            print(2 * "\n", file=file)
+        # Print structures
+        print_structures = not (fmt is None or str(fmt) == "None")
+        if print_structures:
+            for i, structure in enumerate(self.structures):
+                print(" ", file=file)
+                print(marquee("%s input for %s" % (fmt, self.ids[i]), mark="#"), file=file)
+                print("# " + structure.spget_summary(verbose=verbose).replace("\n", "\n# ") + "\n", file=file)
+                if not structure.is_ordered:
+                    print(structure.convert(fmt="cif"), file=file)
+                else:
+                    print(structure.convert(fmt=fmt), file=file)
+                print(2 * "\n", file=file)
+
+        if len(self.structures) > 10:
+            # Print info again
+            print("\n# Found %s structures in %s database (use `verbose` to get further info)\n"
+                    % (len(self.structures), self.dbname), file=file)
 
     def write_notebook(self, nbpath=None, title=None):
         """
@@ -251,18 +263,22 @@ class DatabaseStructures(NotebookWriter):
             nbv.new_code_cell("# dbs.print_results(fmt='cif', verbose=0)"),
             nbv.new_code_cell("# qgrid.show_grid(dbs.lattice_dataframe)"),
             nbv.new_code_cell("# qgrid.show_grid(dbs.coords_dataframe)"),
-            nbv.new_code_cell("qgrid.show_grid(dbs.table)"),
+            nbv.new_code_cell("qgrid.show_grid(dbs.dataframe)"),
         ])
 
         return self._write_nb_nbpath(nb, nbpath)
 
 
 class MpStructures(DatabaseStructures):
-    """Store the results of a query to the Materials Project database."""
+    """
+    Store the results of a query to the Materials Project database.
+
+    .. inheritance-diagram:: MpStructures
+    """
     dbname = "Materials Project"
 
     @lazy_property
-    def table(self):
+    def dataframe(self):
         """Pandas dataframe constructed from self.data. None if data is not available."""
         if not self.data: return None
         import pandas as pd
@@ -280,18 +296,20 @@ class MpStructures(DatabaseStructures):
 
 class CodStructures(DatabaseStructures):
     """
-    Store the results of a query to the COD database http://www.crystallography.net/cod/
+    Store the results of a query to the COD_ database :cite:`Grazulis2011`.
+
+    .. inheritance-diagram:: CodStructures
     """
     dbname = "COD"
 
     @lazy_property
-    def table(self):
+    def dataframe(self):
         """
-        Pandas dataframe constructed. Essentially geometrical info and space groups found by spglib
-        as COD data is rather limited.
+        |pandas-Dataframe| constructed. Essentially geometrical info and space groups found by spglib_
+        as COD API is rather limited.
         """
         df = self.lattice_dataframe.copy()
-        # Add sg from COD
+        # Add space group from COD
         df["cod_sg"] = [d.get("sg", "").replace(" ", "") for d in self.data]
         return df
 

@@ -21,7 +21,7 @@ def make_input(paw=False):
     structure = abidata.structure_from_ucell("SiO2-alpha")
 
     inp = abilab.AbinitInput(structure, pseudos)
-    inp.set_kmesh(ngkpt=[1,1,1], shiftk=[0,0,0])
+    inp.set_kmesh(ngkpt=[1, 1, 1], shiftk=[0, 0, 0])
 
     # Global variables
     ecut = 24
@@ -49,7 +49,7 @@ def make_input(paw=False):
 
 def build_flow(options):
     fftalg_list = [312, 402, 401]
-    ecut_list = list(range(200, 610, 100)) 
+    ecut_list = list(range(200, 610, 100))
     ecut_list = [400,]
 
     if options.mpi_list is None: mpi_list = [2, 4, 6, 8]
@@ -59,12 +59,12 @@ def build_flow(options):
     flow = BenchmarkFlow(workdir=options.get_workdir(__file__), remove=options.remove)
 
     omp_threads = 1
-    for fftalg in fftalg_list: 
+    for fftalg in fftalg_list:
         work = flowtk.Work()
         for npfft in mpi_list:
             if not options.accept_mpi_omp(npfft, omp_threads): continue
             manager = options.manager.new_with_fixed_mpi_omp(npfft, omp_threads)
-            for inp in abilab.input_gen(template, fftalg=fftalg, npfft=npfft, ecut=ecut_list):
+            for inp in template.generate(fftalg=fftalg, npfft=npfft, ecut=ecut_list):
                 work.register_scf_task(inp, manager=manager)
         flow.register_work(work)
 
@@ -76,11 +76,9 @@ def main(options):
     if options.info:
         # print doc string and exit.
         print(__doc__)
-        return 
+        return
 
-    flow = build_flow(options)
-    flow.build_and_pickle_dump()
-    return flow
+    return build_flow(options)
 
 
 if __name__ == "__main__":

@@ -172,10 +172,10 @@ def itest_relaxation_with_restart_from_den(fwp, tvars):
 
     # we should have (0, 1) restarts and no WFK file in outdir.
     for i, task in enumerate(relax_work):
-       assert task.status == task.S_OK
-       assert task.num_restarts == i
-       assert task.num_corrections == 0
-       assert not task.outdir.has_abiext("WFK")
+        assert task.status == task.S_OK
+        assert task.num_restarts == i
+        assert task.num_corrections == 0
+        assert not task.outdir.has_abiext("WFK")
 
     if has_matplotlib:
         assert relax_work.plot_ion_relaxation(show=False) is not None
@@ -209,5 +209,5 @@ def itest_dilatmx_error_handler(fwp, tvars):
      t0 = work[0]
      assert t0.status == t0.S_OK
      print(t0.corrections)
-     assert t0.num_corrections == 1
+     assert t0.num_corrections > 0
      assert t0.corrections[0]["event"]["@class"] == "DilatmxError"

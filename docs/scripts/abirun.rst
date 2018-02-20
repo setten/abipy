@@ -1,4 +1,4 @@
-.. _abirun:
+.. _abirun.py:
 
 ^^^^^^^^^^^^^
 ``abirun.py``
@@ -6,7 +6,6 @@
 
 This script allows the user to submit the calculations contained in the AbiPy Flow 
 (for further detail, consult the :ref:`taskmanager` documentation).
-It provides a command line interface as well as a graphical interface based on ``wxpython``.
 
 .. command-output:: abirun.py --help
 
@@ -16,18 +15,19 @@ It provides a command line interface as well as a graphical interface based on `
 
 At the time of writing (|today|), AbiPy supports the following resource managers:
 
-    * ``bluegene``
-    * ``moab``
-    * ``pbspro``
-    * ``sge``
-    * ``shell``
-    * ``slurm``
-    * ``torque``
+* ``shell``
+* pbspro_
+* slurm_
+* IBM loadleveler_
+* moab_
+* sge_
+* torque_
 
 To obtain the list of options supported by a particular resource manager e.g. ``slurm``::
 
-    $ abirun.py . doc_manager slurm
+    abirun.py . doc_manager slurm
 
+Complete command line reference
 
 .. argparse::
    :ref: abipy.scripts.abirun.get_parser

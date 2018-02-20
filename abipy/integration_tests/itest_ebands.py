@@ -4,11 +4,14 @@ Integration tests for flows (require pytest, ABINIT and a properly configured en
 from __future__ import print_function, division, unicode_literals, absolute_import
 
 import pytest
+import os
+import numpy as np
 import abipy.data as abidata
 import abipy.abilab as abilab
 import abipy.flowtk as flowtk
 
 from abipy.core.testing import has_matplotlib
+
 
 def make_scf_nscf_inputs(tvars, pp_paths, nstep=50):
     """
@@ -22,12 +25,13 @@ def make_scf_nscf_inputs(tvars, pp_paths, nstep=50):
 
     # Global variables
     ecut = 4
-    global_vars = dict(ecut=ecut,
-                       nband=int(nval/2),
-                       nstep=nstep,
-                       paral_kgb=tvars.paral_kgb,
-                       timopt=-1,
-                       )
+    global_vars = dict(
+        ecut=ecut,
+        nband=int(nval/2),
+        nstep=nstep,
+        paral_kgb=tvars.paral_kgb,
+        timopt=-1,
+    )
 
     if multi.ispaw:
         global_vars.update(pawecutdg=2*ecut)
@@ -57,7 +61,7 @@ def make_scf_nscf_inputs(tvars, pp_paths, nstep=50):
 
 def itest_unconverged_scf(fwp, tvars):
     """Testing the treatment of unconverged GS calculations."""
-    print("tvars:\n %s" % str(tvars))
+    #print("tvars:\n %s" % str(tvars))
 
     # Build the SCF and the NSCF input (note nstep to have an unconverged run)
     scf_input, nscf_input = make_scf_nscf_inputs(tvars, pp_paths="14si.pspnc", nstep=1)
@@ -151,7 +155,7 @@ def itest_bandstructure_flow(fwp, tvars):
     """
     Testing band-structure flow with one dependency: SCF -> NSCF.
     """
-    print("tvars:\n %s" % str(tvars))
+    #print("tvars:\n %s" % str(tvars))
 
     # Get the SCF and the NSCF input.
     scf_input, nscf_input = make_scf_nscf_inputs(tvars, pp_paths="14si.pspnc")
@@ -234,11 +238,11 @@ def itest_bandstructure_flow(fwp, tvars):
     with abilab.Robot.from_flow(flow, ext="GSR") as robot:
         table = robot.get_dataframe()
         assert table is not None
-        print(table)
+        #print(table)
 
     # Test AbinitTimer.
     timer = t0.parse_timing()
-    print(timer)
+    assert str(timer)
 
     if has_matplotlib():
         assert timer.plot_pie(show=False)
@@ -258,6 +262,9 @@ def itest_bandstructure_flow(fwp, tvars):
         denfile.get_molekel("den.molekel", workdir=workdir)
         denfile.get_3d_indexed("den.data_indexed", workdir=workdir)
         denfile.get_3d_formatted("den.data_formatted", workdir=workdir)
+        ae_path = os.path.join(abidata.pseudo_dir, "0.14-Si.8.density.AE")
+        hc = denfile.get_hirshfeld(scf_input.structure, all_el_dens_paths=[ae_path] * 2)
+        assert np.abs(hc.net_charges[0]) < 0.1
         # This feature requires Abinit 8.5.2
         if flow.manager.abinit_build.version_ge("8.5.2"):
             den = denfile.get_density(workdir=workdir)
@@ -268,7 +275,7 @@ def itest_bandstructure_schedflow(fwp, tvars):
     """
     Testing bandstructure flow with the scheduler.
     """
-    print("tvars:\n %s" % str(tvars))
+    #print("tvars:\n %s" % str(tvars))
 
     # Get the SCF and the NSCF input.
     scf_input, nscf_input = make_scf_nscf_inputs(tvars, pp_paths="Si.GGA_PBE-JTH-paw.xml")
@@ -281,7 +288,7 @@ def itest_bandstructure_schedflow(fwp, tvars):
     flow.build_and_pickle_dump(abivalidate=True)
 
     fwp.scheduler.add_flow(flow)
-    print(fwp.scheduler)
+    #print(fwp.scheduler)
     # scheduler cannot handle more than one flow.
     with pytest.raises(fwp.scheduler.Error):
         fwp.scheduler.add_flow(flow)
@@ -301,33 +308,31 @@ def itest_bandstructure_schedflow(fwp, tvars):
     # Test if GSR files are produced and are readable.
     for i, task in enumerate(flow[0]):
         with task.open_gsr() as gsr:
-            print(gsr)
             assert gsr.nsppol == 1
+            assert gsr.to_string(verbose=2)
             #assert gsr.structure == structure
 
             # TODO: This does not work yet because GSR files do not contain
             # enough info to understand if we have a path or a mesh.
-            #if i == 1:
-                # Bandstructure case
-                #assert gsr.ebands.has_bzpath
-                #with pytest.raises(ValueError):
-                #    gse.ebands.get_edos()
+            if i == 0:
+                # DOS case
+                assert gsr.ebands.has_bzmesh
+                assert not gsr.ebands.has_bzpath
+                edos = gsr.ebands.get_edos()
+                assert abs(edos.tot_idos.values[-1] - edos.nelect) < 1e-3
 
-            #if i == 2:
-            #    # DOS case
-            #    assert gsr.ebands.has_bzmesh
-            #    gsr.ebands.get_edos()
+            if i == 1:
+                # Bandstructure case
+                assert gsr.ebands.has_bzpath
+                assert not gsr.ebands.has_bzmesh
+                with pytest.raises(ValueError):
+                    gsr.ebands.get_edos()
 
 
 def itest_htc_bandstructure(fwp, tvars):
     """Test band-structure calculations done with the HTC interface."""
     structure = abilab.Structure.from_file(abidata.cif_file("si.cif"))
     pseudos = abidata.pseudos("14si.pspnc")
-
-    # TODO: Add this options because I don't like the kppa approach
-    # I had to use it because it was the approach used in VaspIO
-    #dos_ngkpt = [4,4,4]
-    #dos_shiftk = [0.1, 0.2, 0.3]
 
     # Initialize the flow.
     flow = abilab.Flow(workdir=fwp.workdir, manager=fwp.manager)

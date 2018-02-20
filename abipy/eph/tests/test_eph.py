@@ -15,6 +15,7 @@ class EphFileTest(AbipyTest):
         ncfile = abilab.abiopen(abidata.ref_file("al_888k_161616q_EPH.nc"))
         repr(ncfile); str(ncfile)
         assert ncfile.to_string(verbose=2)
+        assert ncfile.params["nspinor"] == ncfile.nspinor
         assert ncfile.structure.formula == "Al1" and len(ncfile.structure) == 1
         # Ebands
         assert ncfile.nsppol == 1 and ncfile.nspden == 1 and ncfile.nspinor == 1
@@ -24,6 +25,12 @@ class EphFileTest(AbipyTest):
         # Phbands
         assert ncfile.phbands.qpoints.is_path
         assert ncfile.phbands.qpoints.ksampling is None
+
+        # Test edos
+        # TODO
+        #ncfile.edos
+        #if self.has_matplotlib():
+            #assert ncfile.edos.plot(show=False)
 
         # Test A2f(w) function.
         a2f = ncfile.a2f_qcoarse
@@ -38,10 +45,11 @@ class EphFileTest(AbipyTest):
         #self.assert_almost_equal(m1/2, a2f.get_moment(n=1, spin=0))
         #self.assert_almost_equal(self.lambda_iso, )
         #self.assert_almost_equal(self.omega_log, )
-        #self.assert_almost_equal(a2f.get_mcmillan_Tc(mustar=0.8), )
-        #tc = 10
-        #mustar = a2f.get_mustar_from_tc(tc)
-        #self.assert_almost_equal(a2f.get_mcmillan_Tc(mustar), tc)
+        tc = a2f.get_mcmillan_tc(mustar=0.1)
+        #self.assert_almost_equal(tc, )
+        mustar = a2f.get_mustar_from_tc(tc)
+        self.assert_almost_equal(mustar, 0.1)
+        #self.assert_almost_equal(a2f.get_mcmillan_tc(mustar), tc)
 
         assert not ncfile.has_a2ftr
         assert ncfile.a2ftr_qcoarse is None
@@ -52,6 +60,7 @@ class EphFileTest(AbipyTest):
         if self.has_matplotlib():
             # Test A2f plot methods
             assert ncfile.a2f_qcoarse.plot(show=False)
+            assert ncfile.a2f_qcoarse.plot_tc_vs_mustar(show=False)
             assert ncfile.a2f_qintp.plot_a2(phdos_path, show=False)
             assert ncfile.a2f_qintp.plot_nuterms(show=False)
 
@@ -82,6 +91,9 @@ class EphRobotTest(AbipyTest):
             robot.to_string(verbose=2)
             #assert [t[2] for t in robot.sortby("nkpt")] == [10, 60, 182]
 
+            df_params = robot.get_params_dataframe()
+            self.assert_equal(df_params["nspden"].values, 1)
+
             data = robot.get_dataframe(with_geo=True)
             assert "lambda_qcoarse" in data and "omegalog_qintp" in data
 
@@ -94,6 +106,14 @@ class EphRobotTest(AbipyTest):
             # Test plot methods
             if self.has_matplotlib():
                 assert phbands_plotter.boxplot(show=False)
+
+                # Test wrappers provided by RobotWithPhbands
+                assert robot.combiplot_phbands(show=False)
+                assert robot.gridplot_phbands(show=False)
+                assert robot.boxplot_phbands(show=False)
+                assert robot.combiboxplot_phbands(show=False)
+
+                # Test EPHRobot plot methods
                 assert robot.plot_lambda_convergence(show=False)
                 assert robot.plot_a2f_convergence(show=False)
                 #assert robot.plot_a2ftr_convergence(show=False)

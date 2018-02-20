@@ -1,8 +1,10 @@
 # abipy files
 abinit_vars.pickle
 Profile.prof
-abipy/data/runs/flow_*
+abipy/examples/flows/flow_*
+abipy/examples/flows/develop/flow_*
 _debug
+__abinb_workdir__
 abinb_*.ipynb
 *.pickle
 
@@ -41,7 +43,8 @@ pip-log.txt
 
 # Sphinx autodoc
 docs/_build
-docs/examples
+docs/gallery
+docs/flow_gallery
 
 # MacOSX stuff
 .DS_Store

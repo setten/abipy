@@ -46,7 +46,7 @@ class HtmlDiff(object):
 
     def open_browser(self, diffmode="difflib", **kwargs):
         """
-        Generate diff with `diffmode`, open browser, return exit code.
+        Generate diff with ``diffmode``, open browser, return exit code.
         """
         try:
             func = getattr(self, diffmode)
@@ -55,8 +55,8 @@ class HtmlDiff(object):
 
         return func(**kwargs)
 
-    def _launch_browser(self, tmpname):
-        """Open `tmpname` file in the default browser."""
+    def _launch_browser(self, tmpname):  # pragma: no cover
+        """Open ``tmpname`` file in the default browser."""
         # warning: This code is not portable since we should pass a url.
         if not tmpname.startswith("file://"): tmpname = "file://" + tmpname
         import webbrowser
@@ -93,7 +93,7 @@ class HtmlDiff(object):
 
     def pygmentize(self):
         """
-        Execut `diff` and `pygmentize` in a subprocess to generate a HTML file with the diff.
+        Execute ``diff`` and ``pygmentize`` in a subprocess to generate a HTML file with the diff.
         Open file in the browser.
         """
         for file2 in self.filepaths[1:]:

@@ -13,7 +13,7 @@ from abipy.core import Mesh3D
 from abipy.core.kpoints import Kpoint
 from abipy.iotools import Visualizer
 from abipy.iotools.xsf import xsf_write_structure, xsf_write_data
-from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt
+from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt, get_axarray_fig_plt
 
 
 __all__ = [
@@ -70,7 +70,7 @@ class WaveFunction(object):
 
     @property
     def kpoint(self):
-        """:class:`Kpoint` object"""
+        """|Kpoint| object"""
         return self.gsphere.kpoint
 
     @property
@@ -160,7 +160,7 @@ class WaveFunction(object):
         Returns u(G) on the FFT mesh
 
         Args:
-            mesh: :class:`Mesh3d` object. If mesh is None, the internal mesh is used.
+            mesh: |Mesh3d| object. If mesh is None, the internal mesh is used.
         """
         mesh = self.mesh if mesh is None else mesh
         return self.gsphere.tofftmesh(mesh, self.ug)
@@ -171,7 +171,7 @@ class WaveFunction(object):
         differen mesh. Data on the initial mesh is already available in `self.ur`
 
         Args:
-            mesh: :class:`Mesh3d` object.
+            mesh: |Mesh3d| object.
             copy: By default, we return a copy of ur if mesh == self.mesh.
         """
         if mesh == self.mesh:
@@ -184,7 +184,7 @@ class WaveFunction(object):
         Performs the FFT transform of :math:`u(g)` on mesh.
 
         Args:
-            mesh: :class:`Mesh3d` object. If mesh is None, self.mesh is used.
+            mesh: |Mesh3d| object. If mesh is None, self.mesh is used.
 
         Returns:
             :math:`u(r)` on the real space FFT box.
@@ -200,7 +200,7 @@ class WaveFunction(object):
             self.__class__.__name__, self.nspinor, self.spin, self.band))
 
         if hasattr(self, "gsphere"):
-            app(self.gsphere.tostring(verbose=verbose))
+            app(self.gsphere.to_string(verbose=verbose))
         if hasattr(self, "mesh"):
             app(self.mesh.to_string(verbose=verbose))
 
@@ -220,17 +220,20 @@ class WaveFunction(object):
 class PWWaveFunction(WaveFunction):
     """
     This object describes a wavefunction expressed in a plane-wave basis set.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: PWWaveFunction
     """
     def __init__(self, structure, nspinor, spin, band, gsphere, ug):
         """
         Creation method.
 
         Args:
-            structure: Structure object.
+            structure: |Structure| object.
             nspinor: number of spinorial components.
             spin: spin index (only used if collinear-magnetism).
             band: band index (>=0)
-            gsphere :class:`GSphere` instance.
+            gsphere |GSphere| instance.
             ug: 2D array containing u[nspinor,G] for G in gsphere.
         """
         self.structure = structure
@@ -377,24 +380,25 @@ class PWWaveFunction(WaveFunction):
     #    return new
 
     @add_fig_kwargs
-    def plot_line(self, point1, point2, num=200, with_krphase=False, cartesian=False, ax=None, **kwargs):
+    def plot_line(self, point1, point2, num=200, with_krphase=False, cartesian=False,
+                  ax=None, fontsize=12, **kwargs):
         """
-        Plot (interpolated) wavefunction in real space along a line defined by `point1` and `point2`.
+        Plot (interpolated) wavefunction in real space along a line defined by ``point1`` and ``point2``.
 
         Args:
             point1: First point of the line. Accepts 3d vector or integer.
-                The vector is in reduced coordinates unless `cartesian == True`.
+                The vector is in reduced coordinates unless ``cartesian`` is True.
                 If integer, the first point of the line is given by the i-th site of the structure
-                e.g. `point1=0, point2=1` gives the line passing through the first two atoms.
-            point2: Second point of the line. Same API as `point1`.
+                e.g. ``point1=0, point2=1`` gives the line passing through the first two atoms.
+            point2: Second point of the line. Same API as ``point1``.
             num: Number of points sampled along the line.
-            with_krphase: True to include the e^{ikr} phase-factor.
-            cartesian: By default, `point1` and `point1` are interpreted as points in fractional
+            with_krphase: True to include the :math:`e^{ikr}` phase-factor.
+            cartesian: By default, ``point1`` and ``point1`` are interpreted as points in fractional
                 coordinates (if not integers). Use True to pass points in cartesian coordinates.
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
+            fontsize: legend and title fontsize.
 
-        Return:
-            `matplotlib` figure
+        Return: |matplotlib-Figure|
         """
         # Interpolate along line.
         interpolator = self.get_interpolator()
@@ -412,30 +416,30 @@ class PWWaveFunction(WaveFunction):
 
         ax.grid(True)
         ax.set_xlabel("Distance from site1 [Angstrom]")
-        ax.legend(loc="best")
+        ax.legend(loc="best", fontsize=fontsize, shadow=True)
 
         return fig
 
     @add_fig_kwargs
-    def plot_line_neighbors(self, site_index, radius, num=200, with_krphase=False, max_nn=10, **kwargs):
+    def plot_line_neighbors(self, site_index, radius, num=200, with_krphase=False, max_nn=10, fontsize=12, **kwargs):
         """
         Plot (interpolated) density/potential in real space along the lines connecting
-        an atom specified by `site_index` and all neighbors within a sphere of given `radius`.
+        an atom specified by ``site_index`` and all neighbors within a sphere of given ``radius``.
 
         .. warning:
 
-            This routine can produce lots of plots! Be careful with the value of `radius`.
-            See also `max_nn`.
+            This routine can produce lots of plots! Be careful with the value of ``radius``.
+            See also ``max_nn``.
 
         Args:
             site_index: Index of the atom in the structure.
-            radius: Radius of the sphere in Angstrom
+            radius: Radius of the sphere in Angstrom.
             num: Number of points sampled along the line.
-            with_krphase: True to include the e^{ikr} phase-factor.
-            max_nn: By default, only the first `max_nn` neighbors are showed.
+            with_krphase: True to include the :math:`e^{ikr}` phase-factor.
+            max_nn: By default, only the first ``max_nn`` neighbors are showed.
+            fontsize: legend and label fontsize.
 
-        Return:
-            `matplotlib` figure
+        Return: |matplotlib-Figure|
         """
         site = self.structure[site_index]
         nn_list = self.structure.get_neighbors(site, radius, include_index=True)
@@ -451,16 +455,17 @@ class PWWaveFunction(WaveFunction):
             nn_list = nn_list[:max_nn]
 
         # Get grid of axes (one row for neighbor)
-        import matplotlib.pyplot as plt
-        nrows = len(nn_list)
-        fig, axlist = plt.subplots(nrows=nrows, ncols=1, sharex=True, sharey=True, squeeze=True)
+        nrows, ncols = len(nn_list), 1
+        ax_list, fig, plt = get_axarray_fig_plt(None, nrows=nrows, ncols=ncols,
+                                                sharex=True, sharey=True, squeeze=True)
+        ax_list = ax_list.ravel()
 
         interpolator = self.get_interpolator()
         kpoint = None if not with_krphase else self.kpoint
         which = r"\psi(r)" if with_krphase else "u(r)"
 
         # For each neighbor, plot psi along the line connecting site to nn.
-        for i, (nn, ax) in enumerate(zip(nn_list, axlist)):
+        for i, (nn, ax) in enumerate(zip(nn_list, ax_list)):
             nn_site, nn_dist, nn_sc_index  = nn
             title = "%s, %s, dist=%.3f A" % (nn_site.species_string, str(nn_site.frac_coords), nn_dist)
 
@@ -473,18 +478,18 @@ class PWWaveFunction(WaveFunction):
                 ax.plot(r.dist, ur.imag, label=r"$\Im %s$ %s" % (which, spinor_label))
                 ax.plot(r.dist, ur.real**2 + ur.imag**2, label=r"$|\psi(r)|^2$ %s" % spinor_label)
 
-            ax.set_title(title)
+            ax.set_title(title, fontsize=fontsize)
             ax.grid(True)
 
             if i == nrows - 1:
                 ax.set_xlabel("Distance from site_index %s [Angstrom]" % site_index)
-                ax.legend(loc="best")
+                ax.legend(loc="best", fontsize=fontsize, shadow=True)
 
         return fig
 
     def export_ur2(self, filename, visu=None):
         """
-        Export u(r)**2 on file filename.
+        Export :math:`|u(r)|^2` to file ``filename``.
 
         Args:
             filename: String specifying the file path and the file format.
@@ -504,8 +509,11 @@ class PWWaveFunction(WaveFunction):
         tokens = filename.strip().split(".")
         ext = tokens[-1]
 
-        if not tokens[0]: # fname == ".ext" ==> Create temporary file.
-            filename = tempfile.mkstemp(suffix="." + ext, text=True)[1]
+        if not tokens[0]:
+            # fname == ".ext" ==> Create temporary file.
+            # dir = os.getcwd() is needed when we invoke the method from a notebook.
+            from abipy.core.globals import abinb_mkstemp
+            _, filename = abinb_mkstemp(suffix="." + ext, text=True)
             print("Creating temporary file: %s" % filename)
 
         # Compute |u(r)|2 and write data according to ext.
@@ -524,14 +532,14 @@ class PWWaveFunction(WaveFunction):
         else:
             return visu(filename)
 
-    def visualize_ur2(self, visu_name="vesta"):
+    def visualize_ur2(self, appname="vesta"):
         """
-        Visualize u(r)**2 visualizer.
+        Visualize :math:`|u(r)|^2|`.
 
         See :class:`Visualizer` for the list of applications and formats supported.
         """
         # Get the Visualizer subclass from the string.
-        visu = Visualizer.from_name(visu_name)
+        visu = Visualizer.from_name(appname)
 
         # Try to export data to one of the formats supported by the visualizer
         # Use a temporary file (note "." + ext)
@@ -542,7 +550,7 @@ class PWWaveFunction(WaveFunction):
             except visu.Error:
                 pass
         else:
-            raise visu.Error("Don't know how to export data for %s" % visu_name)
+            raise visu.Error("Don't know how to export data for %s" % str(appname))
 
     #def mvplot_cutplanes(self, show=True):
     #    data = self.ur2
@@ -574,4 +582,7 @@ class PWWaveFunction(WaveFunction):
 class PAW_WaveFunction(WaveFunction):
     """
     All the methods that are related to the all-electron representation should start with ae.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: PaW_WaveFunction
     """

@@ -106,8 +106,8 @@ Usage example:
 # Visualization
 ###############
 
-  abistruct.py visualize FILE vesta        => Visualize the structure with vesta (default if not given)
-                                              Supports also xcrysden, vtk, mayavi. See --help
+  abistruct.py visualize FILE -a vesta     => Visualize the structure with vesta (default if -a is not given)
+                                              Supports also ovito, xcrysden, vtk, mayavi, matplotlib See --help
   abistruct.py ipython FILE                => Read structure from FILE and open it in the Ipython terminal.
   abistruct.py notebook FILE               => Read structure from FILE and generate jupyter notebook.
 
@@ -122,12 +122,14 @@ Usage example:
   abistruct.py mp_match FILE               => Read structure from FILE and find matching structures on the
                                               Materials Project site. Use e.g. `-f cif` to change output format.
   abistruct.py mp_search LiF               => Connect to the materials project database. Get structures corresponding
-                                              to a chemical system or formula e.g. `Fe2O3` or `Li-Fe-O`
-                                              Print info and Abinit input files. Use e.g. `-f POSCAR` to change output format.
+                                              to a chemical system or formula e.g. `Fe2O3` or `Li-Fe-O` or
+                                              `Ir-O-*` for wildcard pattern matching.
+                                              Print info and Abinit input files. Use e.g. `-f POSCAR`
+                                              to change output format. `-f None` to disable structure output.
   abistruct.py mp_pd FILE-or-elements      => Generate phase diagram with entries from the Materials Project.
                                               Accept FILE with structure or list of elements e.g `Li-Fe-O`
 
-`FILE` is any file supported by abipy/pymatgen e.g Netcdf files, Abinit input, POSCAR, xsf ...
+`FILE` is any file supported by abipy/pymatgen e.g Netcdf files, Abinit input/output, POSCAR, xsf ...
 Use `abistruct.py --help` for help and `abistruct.py COMMAND --help` to get the documentation for `COMMAND`.
 Use `-v` to increase verbosity level (can be supplied multiple times e.g -vv).
 """
@@ -143,7 +145,7 @@ def get_parser(with_epilog=False):
     nb_parser = argparse.ArgumentParser(add_help=False)
     nb_parser.add_argument('-nb', '--notebook', default=False, action="store_true", help='Generate jupyter notebook.')
     nb_parser.add_argument('--foreground', action='store_true', default=False,
-                            help="Run jupyter notebook in the foreground.")
+        help="Run jupyter notebook in the foreground.")
 
     parser = argparse.ArgumentParser(epilog=get_epilog() if with_epilog else "",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -178,17 +180,18 @@ codes), a looser tolerance of 0.1 (the value used in Materials Project) is often
         """Add --no-primitive and --primitive-standard options to a parser."""
         group = parser.add_mutually_exclusive_group()
         group.add_argument('--no-primitive', default=False, action='store_true', help="Do not enforce primitive cell.")
-        group.add_argument('--primitive-standard', default=False, action='store_true', help="Enforce primitive standard cell.")
+        group.add_argument('--primitive-standard', default=False, action='store_true',
+            help="Enforce primitive standard cell.")
 
-    supported_formats = "(abivars, cif, xsf, poscar, cssr, json)"
+    supported_formats = "(abivars, cif, xsf, poscar, cssr, json, None)"
     def add_format_arg(parser, default, option=True):
         """Add --format option to a parser with default value `default`."""
         if option:
             parser.add_argument("-f", "--format", default=default, type=str,
-                                 help="Output format. Default: %s. Accept: %s" % (default, supported_formats))
+                help="Output format. Default: %s. Accept: %s" % (default, supported_formats))
         else:
             parser.add_argument('format', nargs="?", default=default, type=str,
-                                 help="Output format. Default: %s. Accept: %s" % (default, supported_formats))
+                help="Output format. Default: %s. Accept: %s" % (default, supported_formats))
 
     # Create the parsers for the sub-commands
     subparsers = parser.add_subparsers(dest='command', help='sub-command help',
@@ -207,7 +210,7 @@ to be considered equivalent, thanks to symmetry operations. This is used in the 
 of symmetries of the system, or the application of the symmetry operations to generate from a reduced set of atoms,
 the full set of atoms. Note that a value larger than 0.01 is considered to be unacceptable.""")
     p_abispg.add_argument("-d", "--diff-mode", type=str, default="table", choices=["table", "diff"],
-                          help="Select diff output format.")
+        help="Select diff output format.")
 
     # Subparser for convert command.
     p_convert = subparsers.add_parser('convert', parents=[copts_parser, path_selector],
@@ -218,7 +221,7 @@ the full set of atoms. Note that a value larger than 0.01 is considered to be un
     p_supercell = subparsers.add_parser('supercell', parents=[copts_parser, path_selector],
         help="Generate supercell.")
     p_supercell.add_argument("-s", "--scaling_matrix", nargs="+", required=True, type=int,
-                             help="""\
+        help="""\
 scaling_matrix: A scaling matrix for transforming the lattice vectors.
 Has to be all integers. Several options are possible:
 
@@ -303,7 +306,7 @@ closest points in this particular structure. This is usually what you want in a 
              "from the number of divisions used to sample the smallest "
              "lattice vector of the reciprocal lattice.")
     p_ngkpt.add_argument("-n", "--nksmall", required=True, type=int,
-                         help="Number of divisions used to sample the smallest reciprocal lattice vector.")
+        help="Number of divisions used to sample the smallest reciprocal lattice vector.")
     # Subparser for ktables.
     p_ktables = subparsers.add_parser('ktables', parents=[copts_parser, path_selector],
         help=("Read structure from filepath, call spglib to sample the BZ, "
@@ -341,13 +344,15 @@ closest points in this particular structure. This is usually what you want in a 
 
     # Subparser for visualize command.
     p_visualize = subparsers.add_parser('visualize', parents=[copts_parser, path_selector],
-        help="Visualize the structure with the specified visualizer. Requires external app or optional python modules.")
-    p_visualize.add_argument('visualizer', nargs="?", default="vesta", type=str,
-        help=("Visualizer name. Possible options: `%s`, `mayavi`, `vtk`" % ", ".join(Visualizer.all_visunames())))
+        help=("Visualize the structure with the specified application. "
+              "Requires external app or optional python modules (mayavi, vtk)."))
+    p_visualize.add_argument("-a", "--appname", type=str, default="vesta",
+        help=("Application name. Possible options: %s, mpl (matplotlib), mayavi, vtk" % ", ".join(Visualizer.all_visunames())))
 
     # Options for commands accessing the materials project database.
     mp_rest_parser = argparse.ArgumentParser(add_help=False)
-    mp_rest_parser.add_argument("--mapi-key", default=None, help="Pymatgen MAPI_KEY. Use value in .pmgrc.yaml if not specified.")
+    mp_rest_parser.add_argument("--mapi-key", default=None,
+        help="Pymatgen MAPI_KEY. Use value in .pmgrc.yaml if not specified.")
     mp_rest_parser.add_argument("--endpoint", help="Pymatgen database.", default="https://www.materialsproject.org/rest/v2")
 
     # Subparser for mp_id command.
@@ -358,22 +363,22 @@ closest points in this particular structure. This is usually what you want in a 
 
     # Subparser for mp_match command.
     p_mpmatch = subparsers.add_parser('mp_match', parents=[path_selector, mp_rest_parser, copts_parser, nb_parser],
-        help="Get structure from the pymatgen database. Requires internet connection and MAPI_KEY.")
+        help="Get structure from the pymatgen database. Requires internet connection and PMG_MAPI_KEY.")
     add_format_arg(p_mpmatch, default="abivars")
 
     # Subparser for mp_search command.
     p_mpsearch = subparsers.add_parser('mp_search', parents=[mp_rest_parser, copts_parser, nb_parser],
-        help="Get structure from the pymatgen database. Requires internet connection and MAPI_KEY")
+        help="Get structure from the pymatgen database. Requires internet connection and PMG_MAPI_KEY")
     p_mpsearch.add_argument("chemsys_formula_id", type=str, default=None,
         help="A chemical system (e.g., Li-Fe-O), or formula (e.g., Fe2O3) or materials_id (e.g., mp-1234).")
     p_mpsearch.add_argument("-s", "--select-spgnum", type=int, default=None,
-                            help="Select structures with this space group number.")
+        help="Select structures with this space group number.")
     add_format_arg(p_mpsearch, default="abivars")
 
     # Subparser for mp_pd command.
     p_mp_pda = subparsers.add_parser('mp_pd', parents=[mp_rest_parser, copts_parser],
         help=("Generate phase diagram with entries from the Materials Project. "
-              "Requires internet connection and MAPI_KEY"))
+              "Requires internet connection and PMG_MAPI_KEY"))
     p_mp_pda.add_argument("file_or_elements", type=str, default=None,
         help="FILE with structure or elements e.g., Li-Fe-O).")
     p_mp_pda.add_argument("-u", "--show-unstable", type=int, default=0,
@@ -386,8 +391,9 @@ ehull < show_unstable will be shown.""")
         help="Get structure from COD database. Requires internet connection and mysql")
     p_codsearch.add_argument("formula", type=str, default=None, help="formula (e.g., Fe2O3).")
     p_codsearch.add_argument("-s", "--select-spgnum", type=int, default=None,
-                             help="Select structures with this space group number.")
-    p_codsearch.add_argument('--primitive', default=False, action='store_true', help="Convert COD cells into primitive cells.")
+        help="Select structures with this space group number.")
+    p_codsearch.add_argument('--primitive', default=False, action='store_true',
+        help="Convert COD cells into primitive cells.")
     add_format_arg(p_codsearch, default="abivars")
 
     # Subparser for cod_id command.
@@ -438,7 +444,6 @@ def main():
         structure = abilab.Structure.from_file(options.filepath)
         print(structure.spget_summary(symprec=options.symprec, angle_tolerance=options.angle_tolerance,
                                       verbose=options.verbose))
-
         #remove_equivalent_atoms(structure)
 
     elif options.command == "abispg":
@@ -451,9 +456,10 @@ def main():
             # Here we compare Abinit wrt spglib. If spgrp is None, we create a temporary
             # task to run the code in dry-run mode.
             print("FILE does not contain Abinit symmetry operations.")
-            print("Calling Abinit in --dry-run mode to get space group.")
+            print("Calling Abinit in --dry-run mode with chkprim = 0 to get space group.")
             from abipy.data.hgh_pseudos import HGH_TABLE
             gsinp = factories.gs_input(structure, HGH_TABLE, spin_mode="unpolarized")
+            gsinp["chkprim"] = 0
             abistructure = gsinp.abiget_spacegroup(tolsym=options.tolsym)
             print(abistructure.spget_summary(verbose=options.verbose))
 
@@ -616,8 +622,8 @@ def main():
     elif options.command == "visualize":
         structure = abilab.Structure.from_file(options.filepath)
         print(structure)
-        print("Visualizing structure with:", options.visualizer)
-        structure.visualize(visu_name=options.visualizer)
+        print("Visualizing structure with:", options.appname)
+        structure.visualize(appname=options.appname)
 
     elif options.command == "kpath":
         structure = abilab.Structure.from_file(options.filepath)
@@ -700,8 +706,8 @@ def main():
 
     elif options.command == "mp_id":
         # Get the Structure corresponding to material_id.
-        structure = abilab.Structure.from_material_id(options.mpid, final=True,
-                                                      api_key=options.mapi_key, endpoint=options.endpoint)
+        structure = abilab.Structure.from_mpid(options.mpid, final=True,
+                                               api_key=options.mapi_key, endpoint=options.endpoint)
         # Convert to format and print it.
         print(structure.convert(fmt=options.format))
 

@@ -17,6 +17,7 @@ from abipy.core.kpoints import has_timrev_from_kptopt
 from abipy.core.mixins import TextFile, AbinitNcFile, NotebookWriter
 from abipy.abio.inputs import GEOVARS
 from abipy.abio.timer import AbinitTimerParser
+from abipy.abio.robots import Robot
 from abipy.flowtk import EventsParser, NetcdfReader, GroundStateScfCycle, D2DEScfCycle
 
 
@@ -45,11 +46,23 @@ class AbinitTextFile(TextFile):
 
 
 class AbinitLogFile(AbinitTextFile, NotebookWriter):
-    """Class representing the Abinit log file."""
+    """
+    Class representing the Abinit log file.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: AbinitLogFile
+    """
+
+    def to_string(self, verbose=0):
+        return str(self.events)
+
+    def plot(self, **kwargs):
+        """Empty placeholder."""
+        return None
 
     def write_notebook(self, nbpath=None):
         """
-        Write an ipython notebook to nbpath. If nbpath is None, a temporay file in the current
+        Write a jupyter_ notebook to ``nbpath``. If nbpath is None, a temporay file in the current
         working directory is created. Return path to the notebook.
         """
         nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)
@@ -65,6 +78,9 @@ class AbinitLogFile(AbinitTextFile, NotebookWriter):
 class AbinitOutputFile(AbinitTextFile, NotebookWriter):
     """
     Class representing the main Abinit output file.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: AbinitOutputFile
     """
     # TODO: Extract number of errors and warnings.
 
@@ -81,13 +97,28 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         """
         # Get code version and find magic line signaling that the output file is completed.
         self.version, self.run_completed = None, False
+        self.overall_cputime, self.overall_walltime = 0.0, 0.0
+        self.proc0_cputime, self.proc0_walltime = 0.0, 0.0
+
         with open(self.filepath) as fh:
             for line in fh:
                 if self.version is None and line.startswith(".Version"):
                     self.version = line.split()[1]
+
+                if line.startswith("- Proc."):
+                    #- Proc.   0 individual time (sec): cpu=         25.5  wall=         26.1
+                    tokens = line.split()
+                    self.proc0_walltime = float(tokens[-1])
+                    self.proc0_cputime = float(tokens[-3])
+
+                if line.startswith("+Overall time"):
+                    #+Overall time at end (sec) : cpu=         25.5  wall=         26.1
+                    tokens = line.split()
+                    self.overall_cputime = float(tokens[-3])
+                    self.overall_walltime = float(tokens[-1])
+
                 if " Calculation completed." in line:
                     self.run_completed = True
-                    break
 
         # Parse header to get important dimensions and variables
         self.header, self.footer, self.datasets = [], [], OrderedDict()
@@ -140,7 +171,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         self.final_vars_global, self.final_vars_dataset = None, None
         if self.run_completed:
             if self.dryrun_mode:
-                # footer is not preset. Copy values from header.
+                # footer is not present. Copy values from header.
                 self.final_vars_global, self.final_vars_dataset = self.initial_vars_global, self.initial_vars_dataset
             else:
                 self.final_vars_global, self.final_vars_dataset = self._parse_variables("footer")
@@ -213,7 +244,8 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
             if not line: continue
             # Ignore first char
             line = line[1:].lstrip().rstrip()
-            #print(line)
+            if not line: continue
+            #print("line", line)
             if line[0].isalpha():
                 pop_stack()
                 stack_lines = []
@@ -244,7 +276,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         global_kptopt = vars_global.get("kptopt", 1)
 
         structures = []
-        for i in self.datasets.keys():
+        for i in self.datasets:
             # This code breaks down if there are conflicting GEOVARS in globals and dataset.
             d = inigeo.copy()
             d.update({k: vars_dataset[i][k] for k in GEOVARS if k in vars_dataset[i]})
@@ -317,7 +349,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
     @lazy_property
     def initial_structures(self):
-        """List of initial structures."""
+        """List of initial |Structure|."""
         return self._get_structures("header")
 
     @property
@@ -327,7 +359,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
     @lazy_property
     def final_structures(self):
-        """List of final structures."""
+        """List of final |Structure|."""
         if self.run_completed:
             return self._get_structures("footer")
         else:
@@ -337,7 +369,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
     @lazy_property
     def initial_structure(self):
         """
-        The structure defined in the output file.
+        The |Structure| defined in the output file.
 
         If the input file contains multiple datasets **AND** the datasets
         have different structures, this property returns None.
@@ -361,7 +393,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
     @lazy_property
     def final_structure(self):
         """
-        The structure defined in the output file.
+        The |Structure| defined in the output file.
 
         If the input file contains multiple datasets **AND** the datasets
         have different structures, this property returns None.
@@ -414,6 +446,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         return self.to_string()
 
     def to_string(self, verbose=0):
+        """String representation."""
         lines = ["ndtset: %d, completed: %s" % (self.ndtset, self.run_completed)]
         app = lines.append
 
@@ -446,6 +479,124 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
         return "\n".join(lines)
 
+    def get_dims_spginfo_dataset(self, verbose=0):
+        """
+        Parse the section with the dimensions of the calculation.
+
+        Args:
+            verbose: Verbosity level.
+
+        Return: (dims_dataset, spginfo_dataset)
+            where dims_dataset[i] is an OrderedDict with the dimensions of dataset `i`
+            spginfo_dataset[i] is a dictionary with space group information.
+        """
+        # If single dataset, we have to parse
+        #
+        #  Symmetries : space group Fd -3 m (#227); Bravais cF (face-center cubic)
+        # ================================================================================
+        #  Values of the parameters that define the memory need of the present run
+        #      intxc =       0    ionmov =       0      iscf =       7    lmnmax =       6
+        #      lnmax =       6     mgfft =      18  mpssoang =       3    mqgrid =    3001
+        #      natom =       2  nloc_mem =       1    nspden =       1   nspinor =       1
+        #     nsppol =       1      nsym =      48    n1xccc =    2501    ntypat =       1
+        #     occopt =       1   xclevel =       2
+        # -    mband =           8        mffmem =           1         mkmem =          29
+        #        mpw =         202          nfft =        5832          nkpt =          29
+        # ================================================================================
+        # P This job should need less than                       3.389 Mbytes of memory.
+        #   Rough estimation (10% accuracy) of disk space for files :
+        # _ WF disk file :      0.717 Mbytes ; DEN or POT disk file :      0.046 Mbytes.
+        # ================================================================================
+
+        # If multi datasets we have to parse:
+
+        #  DATASET    2 : space group F-4 3 m (#216); Bravais cF (face-center cubic)
+        # ================================================================================
+        #  Values of the parameters that define the memory need for DATASET  2.
+        #      intxc =       0    ionmov =       0      iscf =       7    lmnmax =       2
+        #      lnmax =       2     mgfft =      12  mpssoang =       3    mqgrid =    3001
+        #      natom =       2  nloc_mem =       1    nspden =       1   nspinor =       1
+        #     nsppol =       1      nsym =      24    n1xccc =    2501    ntypat =       2
+        #     occopt =       1   xclevel =       1
+        # -    mband =          10        mffmem =           1         mkmem =           2
+        #        mpw =          69          nfft =        1728          nkpt =           2
+        # ================================================================================
+        # P This job should need less than                       1.331 Mbytes of memory.
+        #   Rough estimation (10% accuracy) of disk space for files :
+        # _ WF disk file :      0.023 Mbytes ; DEN or POT disk file :      0.015 Mbytes.
+        # ================================================================================
+
+        magic = "Values of the parameters that define the memory need"
+        memory_pre = "P This job should need less than"
+        magic_exit = "------------- Echo of variables that govern the present computation"
+        filesizes_pre = "_ WF disk file :"
+        #verbose = 1
+
+        def parse_spgline(line):
+            """Parse the line with space group info, return dict."""
+            # Could use regular expressions ...
+            i = line.find("space group")
+            spg_str, brav_str = line[i:].replace("space group", "").split(";")
+            toks = spg_str.split()
+            return {
+                "spg_symbol": "".join(toks[:-1]),
+                "spg_number": int(toks[-1].replace("(", "").replace(")", "").replace("#", "")),
+                "bravais": brav_str.strip(),
+            }
+
+        from abipy.tools.numtools import grouper
+        dims_dataset, spginfo_dataset = OrderedDict(), OrderedDict()
+        inblock = 0
+        with open(self.filepath, "rt") as fh:
+            for line in fh:
+                line = line.strip()
+                if verbose: print("inblock:", inblock, " at line:", line)
+
+                if line.startswith(magic_exit):
+                    break
+                if (not line or line.startswith("===") or line.startswith("---")
+                    or line.startswith("Rough estimation") or line.startswith("PAW method is used")):
+                    continue
+
+                if line.startswith("DATASET") or line.startswith("Symmetries :"):
+                    # Get dataset index, parse space group and lattice info, init new dims dict.
+                    inblock = 1
+                    if line.startswith("Symmetries :"):
+                        # No multidataset
+                        dtindex = 1
+                    else:
+                        tokens = line.split()
+                        dtindex = int(tokens[1])
+
+                    dims_dataset[dtindex] = dims = OrderedDict()
+                    spginfo_dataset[dtindex] = parse_spgline(line)
+                    continue
+
+                if inblock == 1 and line.startswith(magic):
+                    inblock = 2
+                    continue
+
+                if inblock == 2:
+                    # Lines with data.
+                    if line.startswith(memory_pre):
+                        dims["mem_per_proc_mb"] = float(line.replace(memory_pre, "").split()[0])
+                    elif line.startswith(filesizes_pre):
+                        tokens = line.split()
+                        mbpos = [i - 1 for i, t in enumerate(tokens) if t.startswith("Mbytes")]
+                        assert len(mbpos) == 2
+                        dims["wfk_size_mb"] = float(tokens[mbpos[0]])
+                        dims["denpot_size_mb"] = float(tokens[mbpos[1]])
+                    elif line.startswith("Pmy_natom="):
+                        dims.update(my_natom=int(line.replace("Pmy_natom=", "").strip()))
+                        #print("my_natom", dims["my_natom"])
+                    else:
+                        if line and line[0] == "-": line = line[1:]
+                        tokens = grouper(2, line.replace("=", "").split())
+                        if verbose: print("tokens:", tokens)
+                        dims.update([(t[0], int(t[1])) for t in tokens])
+
+            return dims_dataset, spginfo_dataset
+
     def next_gs_scf_cycle(self):
         """
         Return the next :class:`GroundStateScfCycle` in the file. None if not found.
@@ -458,6 +609,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         """
         return D2DEScfCycle.from_stream(self)
 
+    # TODO: Use header and vars to understand if we have SCF/DFFT/Relaxation
     def plot(self, tight_layout=True, with_timer=False, show=True):
         """
         Plot GS/DFPT SCF cycles and timer data found in the output file.
@@ -487,11 +639,11 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
     def compare_gs_scf_cycles(self, others, show=True):
         """
-        Produce and returns a list of `matplotlib` figure comparing the GS self-consistent
+        Produce and returns a list of matplotlib_ figure comparing the GS self-consistent
         cycle in self with the ones in others.
 
         Args:
-            others: list of `AbinitOutputFile` objects or strings with paths to output files.
+            others: list of :class:`AbinitOutputFile` objects or strings with paths to output files.
             show: True to diplay plots.
         """
         # Open file here if we receive a string. Files will be closed before returning
@@ -511,7 +663,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
                 other_cycle = other.next_gs_scf_cycle()
                 if other_cycle is None: break
                 last = (i == len(others) - 1)
-                fig = other_cycle.plot(axlist=fig.axes, show=show and last)
+                fig = other_cycle.plot(ax_list=fig.axes, show=show and last)
                 if last:
                     fig.tight_layout()
                     figures.append(fig)
@@ -526,11 +678,11 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
     def compare_d2de_scf_cycles(self, others, show=True):
         """
-        Produce and returns a `matplotlib` figure comparing the DFPT self-consistent
+        Produce and returns a matplotlib_ figure comparing the DFPT self-consistent
         cycle in self with the ones in others.
 
         Args:
-            others: list of `AbinitOutputFile` objects or strings with paths to output files.
+            others: list of :class:`AbinitOutputFile` objects or strings with paths to output files.
             show: True to diplay plots.
         """
         # Open file here if we receive a string. Files will be closed before returning
@@ -550,7 +702,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
                 other_cycle = other.next_d2de_scf_cycle()
                 if other_cycle is None: break
                 last = (i == len(others) - 1)
-                fig = other_cycle.plot(axlist=fig.axes, show=show and last)
+                fig = other_cycle.plot(ax_list=fig.axes, show=show and last)
                 if last:
                     fig.tight_layout()
                     figures.append(fig)
@@ -565,7 +717,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
 
     def write_notebook(self, nbpath=None):
         """
-        Write an ipython notebook to nbpath. If nbpath is None, a temporay file in the current
+        Write a jupyter_ notebook to nbpath. If ``nbpath`` is None, a temporay file in the current
         working directory is created. Return path to the notebook.
         """
         nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)
@@ -579,49 +731,7 @@ class AbinitOutputFile(AbinitTextFile, NotebookWriter):
         return self._write_nb_nbpath(nb, nbpath)
 
 
-class OutNcFile(AbinitNcFile):
-    """
-    Class representing the _OUT.nc file containing the dataset results
-    produced at the end of the run. The netcdf variables can be accessed
-    via instance attribute e.g. `outfile.ecut`. Provides integration with ipython.
-    """
-    def __init__(self, filepath):
-        super(OutNcFile, self).__init__(filepath)
-        self.reader = NetcdfReader(filepath)
-        self._varscache= {k: None for k in self.reader.rootgrp.variables}
-
-    def __dir__(self):
-        """Ipython integration."""
-        return sorted(list(self._varscache.keys()))
-
-    def __getattribute__(self, name):
-        try:
-            return super(OutNcFile, self).__getattribute__(name)
-        except AttributeError:
-            # Look in self._varscache
-            varscache = super(OutNcFile, self).__getattribute__("_varscache")
-            if name not in varscache:
-                raise AttributeError("Cannot find attribute %s" % name)
-            reader = super(OutNcFile, self).__getattribute__("reader")
-            if varscache[name] is None:
-                varscache[name] = reader.read_value(name)
-            return varscache[name]
-
-    def close(self):
-        self.reader.close()
-
-    def get_allvars(self):
-        """
-        Read all netcdf variables present in the file.
-        Return dictionary varname --> value
-        """
-        for k, v in self._varscache.items():
-            if v is not None: continue
-            self._varscache[k] = self.reader.read_value(k)
-        return self._varscache
-
-
-def validate_output_parser(abitests_dir=None, output_files=None):
+def validate_output_parser(abitests_dir=None, output_files=None):  # pragma: no cover
     """
     Validate/test Abinit output parser.
 
@@ -696,3 +806,159 @@ def validate_output_parser(abitests_dir=None, output_files=None):
         cprint("All input files successfully parsed!", "green")
 
     return len(errpaths)
+
+
+class AboRobot(Robot):
+    """
+    This robot analyzes the results contained in multiple Abinit output files.
+    Can compare dimensions, SCF cycles, analyze timers.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: AboRobot
+    """
+    EXT = "abo"
+
+    def get_dims_dataframe(self, with_time=True, index=None):
+        """
+        Build and return |pandas-DataFrame| with the dimensions of the calculation.
+
+        Args:
+            with_time: True if walltime and cputime should be added
+            index: Index of the dataframe. Use relative paths of files if None.
+        """
+        rows, my_index = [], []
+        for i, abo in enumerate(self.abifiles):
+            try:
+                dims_dataset, spg_dataset = abo.get_dims_spginfo_dataset()
+            except Exception as exc:
+                cprint("Exception while trying to get dimensions from %s\n%s" % (abo.relpath, str(exc)), "yellow")
+                continue
+
+            for dtindex, dims in dims_dataset.items():
+                dims = dims.copy()
+                dims.update({"dtset": dtindex})
+                # Add walltime and cputime in seconds
+                if with_time:
+                    dims.update(OrderedDict([(k, getattr(abo, k)) for k in
+                        ("overall_cputime", "proc0_cputime", "overall_walltime", "proc0_walltime")]))
+                rows.append(dims)
+                my_index.append(abo.relpath if index is None else index[i])
+
+        import pandas as pd
+        return pd.DataFrame(rows, index=my_index, columns=list(rows[0].keys()))
+
+    def get_dataframe(self, with_geo=True, with_dims=True, abspath=False, funcs=None):
+        """
+        Return a |pandas-DataFrame| with the most important results and the filenames as index.
+
+        Args:
+            with_geo: True if structure info should be added to the dataframe
+            with_dims: True if dimensions should be added
+            abspath: True if paths in index should be absolute. Default: Relative to getcwd().
+            funcs: Function or list of functions to execute to add more data to the DataFrame.
+                Each function receives a |GsrFile| object and returns a tuple (key, value)
+                where key is a string with the name of column and value is the value to be inserted.
+        """
+        rows, row_names = [], []
+        for label, abo in self.items():
+            row_names.append(label)
+            d = OrderedDict()
+
+            if with_dims:
+                dims_dataset, spg_dataset = abo.get_dims_spginfo_dataset()
+                if len(dims_dataset) > 1:
+                    cprint("Multiple datasets are not supported. ARGH!", "yellow")
+                d.update(dims_dataset[1])
+
+            # Add info on structure.
+            if with_geo and abo.run_completed:
+                d.update(abo.final_structure.get_dict4pandas(with_spglib=True))
+
+            # Execute functions
+            if funcs is not None: d.update(self._exec_funcs(funcs, abo))
+            rows.append(d)
+
+        import pandas as pd
+        row_names = row_names if not abspath else self._to_relpaths(row_names)
+        return pd.DataFrame(rows, index=row_names, columns=list(rows[0].keys()))
+
+    def get_time_dataframe(self):
+        """
+        Return a |pandas-DataFrame| with the wall-time, cpu time in seconds and the filenames as index.
+        """
+        rows, row_names = [], []
+
+        for label, abo in self.items():
+            row_names.append(label)
+            d = OrderedDict([(k, getattr(abo, k)) for k in
+                ("overall_cputime", "proc0_cputime", "overall_walltime", "proc0_walltime")])
+            rows.append(d)
+
+        import pandas as pd
+        return pd.DataFrame(rows, index=row_names, columns=list(rows[0].keys()))
+
+    # TODO
+    #def gridplot_timer(self)
+
+    def write_notebook(self, nbpath=None):
+        """
+        Write a jupyter_ notebook to nbpath. If nbpath is None, a temporay file in the current
+        working directory is created. Return path to the notebook.
+        """
+        nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)
+
+        args = [(l, f.filepath) for l, f in self.items()]
+        nb.cells.extend([
+            #nbv.new_markdown_cell("# This is a markdown cell"),
+            nbv.new_code_cell("robot = abilab.AboRobot(*%s)\nrobot.trim_paths()\nrobot" % str(args)),
+            nbv.new_code_cell("# robot.get_dims_dataframe()"),
+            nbv.new_code_cell("robot.get_dataframe()"),
+        ])
+
+        # Mixins
+        nb.cells.extend(self.get_baserobot_code_cells())
+
+        return self._write_nb_nbpath(nb, nbpath)
+
+
+class OutNcFile(AbinitNcFile):
+    """
+    Class representing the _OUT.nc file containing the dataset results
+    produced at the end of the run. The netcdf variables can be accessed
+    via instance attribute e.g. ``outfile.ecut``. Provides integration with ipython_.
+    """
+    def __init__(self, filepath):
+        super(OutNcFile, self).__init__(filepath)
+        self.reader = NetcdfReader(filepath)
+        self._varscache= {k: None for k in self.reader.rootgrp.variables}
+
+    def __dir__(self):
+        """Ipython integration."""
+        return sorted(list(self._varscache.keys()))
+
+    def __getattribute__(self, name):
+        try:
+            return super(OutNcFile, self).__getattribute__(name)
+        except AttributeError:
+            # Look in self._varscache
+            varscache = super(OutNcFile, self).__getattribute__("_varscache")
+            if name not in varscache:
+                raise AttributeError("Cannot find attribute %s" % name)
+            reader = super(OutNcFile, self).__getattribute__("reader")
+            if varscache[name] is None:
+                varscache[name] = reader.read_value(name)
+            return varscache[name]
+
+    def close(self):
+        """Close the file."""
+        self.reader.close()
+
+    def get_allvars(self):
+        """
+        Read all netcdf_ variables present in the file.
+        Return dictionary varname --> value
+        """
+        for k, v in self._varscache.items():
+            if v is not None: continue
+            self._varscache[k] = self.reader.read_value(k)
+        return self._varscache

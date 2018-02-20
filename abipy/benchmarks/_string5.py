@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Hydronium ion + NH3 molecule. String method.                     
+Hydronium ion + NH3 molecule. String method.
 Moving the proton from H2O to NH3 keeping O and H atoms fixed.
 Based on tutoparal/tstring_04.in
 """
@@ -17,7 +17,7 @@ from itertools import product
 from abipy.benchmarks import bench_main, BenchmarkFlow
 
 
-def make_input():
+def make_input(): # pragma: no cover
     """
     """
     pseudos = abidata.pseudos("8o_hard.paw", "7n.paw", "1h.paw")
@@ -45,7 +45,7 @@ def make_input():
 
     structure = abilab.Structure.from_abivars(
         acell = abilab.ArrayWithUnit([10, 5, 5], "ang").to("bohr"),
-        rprim=np.eye(3), 
+        rprim=np.eye(3),
         typat=[1, 3, 3, 2, 3, 3, 3, 3], # Type of atoms (H2O + NH3 + H)
         znucl=[8.0, 7.0, 1.0],
         xangst=xangst,
@@ -55,18 +55,18 @@ def make_input():
 
     inp.set_vars(
         # Options for parallelism
-        paral_kgb=1, 
+        paral_kgb=1,
 
         # Input/output options
-        prtwf=0,   
-        prtden=0,   
-        prteig=0,  
-        prtdensph=0, 
+        prtwf=0,
+        prtden=0,
+        prteig=0,
+        prtdensph=0,
         timopt=-1,
 
         # Convergence parameters
         ecut=20.,
-        pawecutdg=40., 
+        pawecutdg=40.,
 
         # Control of the relaxation    # TO BE SUPPRESSED WHEN USING IMGMOV keyword
         #ionmov 3                      # BFGS (Broyden) algorithm for ions relaxation
@@ -75,21 +75,21 @@ def make_input():
         #tolmxf 5.0d-5                 # Stopping criterion of relaxation cycle
 
         # Control of the SCF cycle
-        toldff=5.0e-7,                 
-        nstep=50,                      
+        toldff=5.0e-7,
+        nstep=50,
 
         # Electronic configuration
-        nband=10,                      
-        occopt=1,                      
+        nband=10,
+        occopt=1,
         ixc="-001009",              # Select LDA XC functional (LDA PZ from LibXC)
 
         # BZ sampling
         kptopt=0,                 # Scheme for k-points generation
-        nkpt=1,  
+        nkpt=1,
         kpt=3*[0.],               # Explicit k-point (gamma point)
         nsym=1,                   # No symmetry
 
-        natfix=2,  
+        natfix=2,
         iatfix=[1, 4],            # Keep O and N atoms fixed
         charge=1.0,               # Charge of the simulation cell
 
@@ -107,7 +107,7 @@ def make_input():
     return inp
 
 
-def build_flow(options):
+def build_flow(options): # pragma: no cover
     flow = BenchmarkFlow(workdir=options.get_workdir(__file__), remove=options.remove)
 
     template = make_input()
@@ -116,8 +116,8 @@ def build_flow(options):
     #pconfs = [
     #  dict
     #npimage=10,  # CPU distribution over images
-    #npband=10, 
-    #npfft=2,  
+    #npband=10,
+    #npfft=2,
     #bandpp=1,    # CPU distribution for 20 CPU cores per image
     #]
 
@@ -125,7 +125,7 @@ def build_flow(options):
     #max_ncpus, min_eff = options.max_ncpus, options.min_eff
     #print("Getting all autoparal configurations up to max_ncpus: ",max_ncpus," with efficiency >= ",min_eff)
     #pconfs = template.abiget_autoparal_pconfs(max_ncpus, autoparal=1, verbose=options.verbose)
-    #if options.verbose: 
+    #if options.verbose:
     #print(pconfs)
 
     #%% nprocs_to_test = 200
@@ -145,15 +145,13 @@ def build_flow(options):
 
 
 @bench_main
-def main(options):
+def main(options):  # pragma: no cover
     if options.info:
         # print doc string and exit.
         print(__doc__)
-        return 
+        return
 
-    flow = build_flow(options)
-    flow.build_and_pickle_dump()
-    return flow
+    return build_flow(options)
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ class TestStructure(AbipyTest):
 
             # Export data in Xcrysden format.
             #structure.export(self.get_tmpname(text=True, suffix=".xsf"))
-            #visu = structure.visualize(visu_name="vesta")
+            #visu = structure.visualize(appname="vesta")
             #assert callable(visu)
 
             if self.has_ase():
@@ -47,6 +47,7 @@ class TestStructure(AbipyTest):
         si = Structure.as_structure(abidata.cif_file("si.cif"))
         assert si.formula == "Si2"
         assert si.abi_spacegroup is None and not si.has_abi_spacegroup
+        assert "ntypat" in si.to(fmt="abivars")
 
         spgroup = si.spgset_abi_spacegroup(has_timerev=True)
         assert spgroup is not None
@@ -113,6 +114,9 @@ class TestStructure(AbipyTest):
         assert Specie("Zn", 2) in oxi_znse.composition.elements
         assert Specie("Se", -2) in oxi_znse.composition.elements
 
+        system = si.spget_lattice_type()
+        assert system == "cubic"
+
         e = si.spget_equivalent_atoms(printout=True)
         assert len(e.irred_pos) == 1
         self.assert_equal(e.eqmap[0], [0, 1])
@@ -124,6 +128,7 @@ class TestStructure(AbipyTest):
             assert si.plot_bz(show=False)
             assert si.plot_bz(pmg_path=False, show=False)
             assert si.plot_xrd(show=False)
+            assert si.plot(show=False)
 
         if self.has_mayavi():
             #assert si.vtkview(show=False)  # Disabled due to (core dumped) on travis
@@ -144,17 +149,26 @@ class TestStructure(AbipyTest):
         self.assert_equal(ksamp.ngkpt, [10, 10, 10])
         self.assert_equal(ksamp.shiftk, shiftk)
 
-        si = Structure.from_material_id("mp-149")
+        si = Structure.from_mpid("mp-149")
         assert si.formula == "Si2"
 
         mgb2_cod = Structure.from_cod_id(1526507, primitive=True)
         assert mgb2_cod.formula == "Mg1 B2"
+        assert mgb2_cod.spget_lattice_type() == "hexagonal"
 
         mgb2 = abidata.structure_from_ucell("MgB2")
         if self.has_ase():
             mgb2.abi_primitive()
 
         assert [site.species_string for site in mgb2.get_sorted_structure_z()] == ["B", "B", "Mg"]
+
+        s2inds = mgb2.get_symbol2indices()
+        self.assert_equal(s2inds["Mg"], [0])
+        self.assert_equal(s2inds["B"], [1, 2])
+
+        s2coords = mgb2.get_symbol2coords()
+        self.assert_equal(s2coords["Mg"], [[0, 0, 0]])
+        self.assert_equal(s2coords["B"],  [[1/3, 2/3, 0.5], [2/3, 1/3, 0.5]])
 
         # TODO: This part should be tested more carefully
         mgb2.abi_sanitize()
@@ -167,7 +181,8 @@ class TestStructure(AbipyTest):
         self.serialize_with_pickle(mgb2)
 
         pseudos = abidata.pseudos("12mg.pspnc", "5b.pspnc")
-        assert mgb2.num_valence_electrons(pseudos) == 8
+        nv = mgb2.num_valence_electrons(pseudos)
+        assert nv == 8 and isinstance(nv , int)
         assert mgb2.valence_electrons_per_atom(pseudos) == [2, 3, 3]
         self.assert_equal(mgb2.calc_shiftk() , [[0.0, 0.0, 0.5]])
 
@@ -184,6 +199,7 @@ class TestStructure(AbipyTest):
         # Function to compute cubic a0 from primitive v0 (depends on struct_type)
         vol2a = {"fcc": lambda vol: (4 * vol) ** (1/3.),
                  "bcc": lambda vol: (2 * vol) ** (1/3.),
+                 "zincblende": lambda vol: (4 * vol) ** (1/3.),
                  "rocksalt": lambda vol: (4 * vol) ** (1/3.),
                  "ABO3": lambda vol: vol ** (1/3.),
                  "hH": lambda vol: (4 * vol) ** (1/3.),
@@ -202,6 +218,8 @@ class TestStructure(AbipyTest):
         fcc_conv = Structure.fcc(a, ["Si"], primitive=False)
         assert len(fcc_conv) == 4
         self.assert_almost_equal(a**3, fcc_conv.volume)
+        zns = Structure.zincblende(a / bohr_to_ang, ["Zn", "S"], units="bohr")
+        self.assert_almost_equal(a, vol2a["zincblende"](zns.volume))
         rock = Structure.rocksalt(a, ["Na", "Cl"])
         assert len(rock) == 2
         self.assert_almost_equal(a, vol2a["rocksalt"](rock.volume))
@@ -253,18 +271,33 @@ class TestStructure(AbipyTest):
         structure.write_vib_file(sys.stdout, qpoint, 0.1*np.array([[1, 1, 1], [1, 1, 1]]),
                                  do_real=True, frac_coords=False, max_supercell=mx_sc, scale_matrix=scale_matrix)
 
-        structure.write_vib_file(sys.stdout, qpoint, 0.1*np.array([[1, 1, 1], [-1, -1, -1]]),
+        displ = np.array([[1, 1, 1], [-1, -1, -1]])
+        structure.write_vib_file(sys.stdout, qpoint, 0.1 * displ,
                                  do_real=True, frac_coords=False, max_supercell=mx_sc, scale_matrix=scale_matrix)
 
-        structure.write_vib_file(sys.stdout, qpoint, 0.1*np.array([[1, 1, 1], [-1, -1, -1]]),
+        structure.write_vib_file(sys.stdout, qpoint, 0.1 * displ,
                                  do_real=True, frac_coords=False, max_supercell=mx_sc, scale_matrix=None)
 
-        structure.frozen_phonon(qpoint, 0.1*np.array([[1, 1, 1], [-1, -1, -1]]),
-                                do_real=True, frac_coords=False, max_supercell=mx_sc, scale_matrix=scale_matrix)
+        fp_data = structure.frozen_phonon(qpoint, 0.1 * displ, eta=0.5, frac_coords=False,
+                                          max_supercell=mx_sc, scale_matrix=scale_matrix)
 
-        # We should add some checks here
-        #structure.frozen_phonon(qpoint, 0.1*np.array([[1, 1, 1], [-1, -1, -1]]),
-        #                        do_real=True, frac_coords=False, max_supercell=mx_sc, scale_matrix=None)
+        max_displ = np.linalg.norm(displ, axis=1).max()
+        self.assertArrayAlmostEqual(fp_data.structure[0].coords,
+                                    structure[0].coords + 0.5*displ[0]/max_displ)
+        self.assertArrayAlmostEqual(fp_data.structure[8].coords,
+                                    structure[1].coords + 0.5*displ[1]/max_displ)
+
+        displ2 = np.array([[1, 0, 0], [0, 1, 1]])
+
+        f2p_data = structure.frozen_2phonon(qpoint, 0.05 * displ, 0.02*displ2, eta=0.5, frac_coords=False,
+                                           max_supercell=mx_sc, scale_matrix=scale_matrix)
+
+        d_tot = 0.05*displ+0.02*displ2
+        max_displ = np.linalg.norm(d_tot, axis=1).max()
+        self.assertArrayAlmostEqual(f2p_data.structure[0].coords,
+                                    structure[0].coords + 0.5*d_tot[0]/max_displ)
+        self.assertArrayAlmostEqual(f2p_data.structure[8].coords,
+                                    structure[1].coords + 0.5*d_tot[1]/max_displ)
 
         #print("Structure = ", structure)
         #print(structure.lattice._matrix)

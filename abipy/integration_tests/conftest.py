@@ -1,5 +1,5 @@
 """Configuration file for pytest."""
-from __future__ import print_function, division, unicode_literals
+from __future__ import print_function, division
 
 import os
 import pytest
@@ -9,6 +9,9 @@ import abipy.abilab as abilab
 import abipy.flowtk as flowtk
 
 from monty.collections import AttrDict
+
+# Are we running on travis?
+on_travis = os.environ.get("TRAVIS", "False") == "true"
 
 # Create the list of Manager configurations used for the integration tests.
 # Note that the items in _manager_confs must be hashable hence we cannot use dictionaries directly
@@ -41,7 +44,7 @@ def fwp(tmpdir, request):
     """
     Parameters used to initialize Flows.
 
-    This fixture allows us to change the :class:`TaskManager`
+    This fixture allows us to change the |TaskManager|
     so that we can easily test different configurations.
     """
     # Temporary working directory
@@ -52,14 +55,23 @@ def fwp(tmpdir, request):
 
     fwp.scheduler = flowtk.PyFlowScheduler.from_file(os.path.join(USER_CONFIG_DIR, "scheduler.yml"))
 
+    fwp.on_travis = on_travis
+
     return fwp
 
 
 # Use tuples instead of dict because pytest require objects to be hashable.
-_tvars_list = [
-    (("paral_kgb", 0),),
-    (("paral_kgb", 1),),
-]
+if on_travis:
+    _tvars_list = [
+        (("paral_kgb", 0),),
+        #(("paral_kgb", 1),),
+    ]
+
+else:
+    _tvars_list = [
+        #(("paral_kgb", 0),),
+        (("paral_kgb", 1),),
+    ]
 
 @pytest.fixture(params=_tvars_list)
 def tvars(request):

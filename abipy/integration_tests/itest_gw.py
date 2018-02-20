@@ -13,8 +13,7 @@ def make_g0w0_inputs(ngkpt, tvars):
     """
     Input files for the calculation of the GW corrections.
 
-    Returns:
-        gs_input, nscf_input, scr_input, sigma_input
+    Returns: gs_input, nscf_input, scr_input, sigma_input
     """
     multi = abilab.MultiDataset(structure=abidata.cif_file("si.cif"),
                                 pseudos=abidata.pseudos("14si.pspnc"), ndtset=4)
@@ -146,11 +145,11 @@ def itest_g0w0_flow(fwp, tvars):
             assert len(scr.wpts) == 2
             assert scr.nwre == 1 and scr.nwim == 1
             for iq, qpoint in enumerate(scr.qpoints[:2]):
-                print(qpoint)
+                #print(qpoint)
                 qpt, iqcheck = scr.reader.find_qpoint_fileindex(qpoint)
                 assert iqcheck == iq
                 em1 = scr.get_em1(qpoint)
-                print(em1)
+                #print(em1)
 
     # TODO Add more tests
     #assert flow.validate_json_schema()
@@ -176,7 +175,7 @@ def itest_g0w0qptdm_flow(fwp, tvars):
     assert not scr_work.depends_on(bands_work.scf_task)
 
     for sigma_task in sigma_work:
-        print("sigma_task.deps", sigma_task.deps)
+        #print("sigma_task.deps", sigma_task.deps)
         assert sigma_task.depends_on(bands_work.nscf_task)
         assert not sigma_task.depends_on(bands_work.scf_task)
         assert sigma_task.depends_on(scr_work)
@@ -250,7 +249,6 @@ def itest_htc_g0w0(fwp, tvars):
     flow.allocate()
     flow.connect_signals()
 
-    #flow.build_and_pickle_dump(abivalidate=True)
     fwp.scheduler.add_flow(flow)
     assert fwp.scheduler.start() == 0
     assert not fwp.scheduler.exceptions

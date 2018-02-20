@@ -24,7 +24,7 @@ class Function1D(object):
 
     @classmethod
     def from_constant(cls, mesh, const):
-        """Build a constant function from the mesh and the scalart `const`"""
+        """Build a constant function from the mesh and the scalar ``const``"""
         mesh = np.ascontiguousarray(mesh)
         return cls(mesh, np.ones(mesh.shape) * const)
 
@@ -41,7 +41,7 @@ class Function1D(object):
 
     @property
     def mesh(self):
-        """Array with the mesh points"""
+        """|numpy-array| with the mesh points"""
         return self._mesh
 
     @property
@@ -120,7 +120,7 @@ class Function1D(object):
         return self.__class__(self.mesh, self.values**other)
 
     def _repr_html_(self):
-        """Integration with jupyter notebooks."""
+        """Integration with jupyter_ notebooks."""
         return self.plot(show=False)
 
     @property
@@ -138,7 +138,7 @@ class Function1D(object):
         return self.__class__(self.mesh, self.values.conjugate)
 
     def abs(self):
-        """Return the absolute value."""
+        """Return :class:`Function1D` with the absolute value."""
         return self.__class__(self.mesh, np.abs(self.values))
 
     @classmethod
@@ -146,7 +146,7 @@ class Function1D(object):
         """
         Initialize the object from a callable.
 
-        example:
+        :example:
 
            Function1D.from_func(np.sin, mesh=np.arange(1,10))
         """
@@ -171,7 +171,7 @@ class Function1D(object):
 
     def to_file(self, path, fmt='%.18e', header=''):
         """
-        Save data in a text file. Use format fmr. A header is added at the beggining.
+        Save data in a text file. Use format fmr. A header is added at the beginning.
         """
         fmt = "%s %s\n" % (fmt, fmt)
         with open(path, "wt") as fh:
@@ -224,7 +224,7 @@ class Function1D(object):
         """
         Check if values is array of complex numbers.
         The type of the input is checked, not the value. Even if the input
-        has an imaginary part equal to zero, `iscomplexobj` evaluates to True.
+        has an imaginary part equal to zero, `np.iscomplexobj` evaluates to True.
         """
         return np.iscomplexobj(self.values)
 
@@ -236,7 +236,7 @@ class Function1D(object):
     @lazy_property
     def dx(self):
         """
-        ndarray of len(self)-1 elements giving the distance between two
+        |numpy-array| of len(self) - 1 elements giving the distance between two
         consecutive points of the mesh, i.e. dx[i] = ||x[i+1] - x[i]||.
         """
         dx = np.zeros(len(self)-1)
@@ -263,7 +263,7 @@ class Function1D(object):
             acc: Accuracy. 4 is fine in many cases.
 
         Returns:
-            new :class:`Function1D` instance with the derivative.
+            :class:`Function1D` instance with the derivative.
         """
         if self.h is None:
             raise ValueError("Finite differences with inhomogeneous meshes are not supported")
@@ -318,6 +318,11 @@ class Function1D(object):
         return self.spline.integral(a, b)
 
     @lazy_property
+    def integral_value(self):
+        r"""Compute :math:`\int f(x) dx`."""
+        return self.integral()[-1][1]
+
+    @lazy_property
     def l1_norm(self):
         r"""Compute :math:`\int |f(x)| dx`."""
         return abs(self).integral()[-1][1]
@@ -356,27 +361,27 @@ class Function1D(object):
 
         return self.__class__(mesh, fft_vals)
 
-    #def convolve(self, other):
-    #    ""Convolution with FFT."""
+    #def convolve_with_func1d(self, other):
+    #    """Convolve self with other."""
     #    assert self.has_same_mesh(other)
     #    from scipy.signal import convolve
     #    conv = convolve(self.values, other.values, mode="same") * self.h
     #    return self.__class__(self.mesh, conv)
 
-    #def gauss_convolve(self, width):
-    #   """Convolve self with a gaussian of standard deviation width."""
-    #    from abipy.tools import gauss_ufunc
-    #    gauss = gauss_ufunc(width, center=0.0, height=None)
-    #    gdata = Function1D(self.mesh, gauss(self.mesh))
-    #    return self.convolve(gdata)
+    #def gaussian_convolution(self, width, height=None):
+    #    """Convolve data with a Gaussian of standard deviation ``width``."""
+    #    from abipy.tools.numtools import gaussian
+    #    gvals = gaussian(self.mesh, width, center=self.mesh[len(self)//2], height=height)
+    #    return self.convolve_with_func1d(Function1D(self.mesh, gvals))
 
-    #def lorentz_convolve(self, gamma):
-    #   """Convolve self with a Lorentzian."""
-    #    lorentz = lorentz_ufunc(gamma, center=0.0, height=None)
-    #    return self.convolve(Function1D.from_func(self.mesh, lorentz))
+    #def lorentzian_convolution(self, gamma, height=None):
+    #    """Convolve data with a Lorentzian of half-width at half-maximum ``gamma``"""
+    #    from abipy.tools.numtools import lorentzian
+    #    lvals = lorentzian(self.mesh, gamma, center=self.mesh[len(self)//2], height=height)
+    #    return self.convolve_with_func1d(Function1D(self.mesh, lvals))
 
-    #def smooth(self, window_len=21, window="hanning"):
-    #    from abipy.tools import smooth
+    #def smooth(self, window_len=11, window="hanning"):
+    #    from abipy.tools.numtools import smooth
     #    smooth_vals = smooth(self.values, window_len=window_len, window=window)
     #    return self.__class__(self.mesh, smooth_vals)
 
@@ -391,7 +396,7 @@ class Function1D(object):
                 If False, the divergence is ignored, results are less accurate
                 but the calculation is faster.
 
-        See: https://en.wikipedia.org/wiki/Kramers%E2%80%93Kronig_relations
+        .. seealso:: <https://en.wikipedia.org/wiki/Kramers%E2%80%93Kronig_relations>
         """
         from scipy.integrate import cumtrapz, quad
         from scipy.interpolate import UnivariateSpline
@@ -431,7 +436,7 @@ class Function1D(object):
                 If False, the divergence is ignored, results are less accurate
                 but the calculation is faster.
 
-        See: https://en.wikipedia.org/wiki/Kramers%E2%80%93Kronig_relations
+        .. seealso:: <https://en.wikipedia.org/wiki/Kramers%E2%80%93Kronig_relations>
         """
         from scipy.integrate import cumtrapz, quad
         from scipy.interpolate import UnivariateSpline
@@ -465,11 +470,11 @@ class Function1D(object):
         Helper function to plot self on axis ax.
 
         Args:
-            ax: `matplotlib` axis.
-            exchange_xy: True to exchange the axis in the plot
+            ax: |matplotlib-Axes|.
+            exchange_xy: True to exchange the axis in the plot.
             args: Positional arguments passed to ax.plot
-            kwargs: Keyword arguments passed to `matplotlib`.  Accepts also:
             xfactor, yfactor: xvalues and yvalues are multiplied by this factor before plotting.
+            kwargs: Keyword arguments passed to ``matplotlib``. Accepts
 
         ==============  ===============================================================
         kwargs          Meaning
@@ -508,7 +513,7 @@ class Function1D(object):
         Plot the function.
 
         Args:
-            ax: matplotlib :class:`Axes` or None if a new figure should be created.
+            ax: |matplotlib-Axes| or None if a new figure should be created.
 
         ==============  ===============================================================
         kwargs          Meaning
@@ -516,11 +521,9 @@ class Function1D(object):
         exchange_xy     True to exchange x- and y-axis (default: False)
         ==============  ===============================================================
 
-        Returns:
-            `matplotlib` figure.
+        Returns: |matplotlib-Figure|.
         """
-        ax, fig, plt = get_ax_fig_plt(ax)
-
+        ax, fig, plt = get_ax_fig_plt(ax=ax)
         ax.grid(True)
         exchange_xy = kwargs.pop("exchange_xy", False)
         self.plot_ax(ax, exchange_xy=exchange_xy, **kwargs)

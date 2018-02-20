@@ -11,11 +11,10 @@ from monty.termcolor import cprint
 from monty.functools import lazy_property
 from monty.string import marquee, list_strings
 from pymatgen.core.periodic_table import Element
-from abipy.tools.plotting import add_fig_kwargs, get_ax_fig_plt
 from abipy.core.mixins import AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, NotebookWriter
 from abipy.electrons.ebands import ElectronsReader
 from abipy.tools import gaussian
-from abipy.tools.plotting import set_axlims
+from abipy.tools.plotting import set_axlims, get_axarray_fig_plt, add_fig_kwargs, get_ax_fig_plt
 
 
 def gaussians_dos(dos, mesh, width, values, energies, weights):
@@ -27,7 +26,7 @@ def gaussians_dos(dos, mesh, width, values, energies, weights):
 
 class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, NotebookWriter):
     """
-    Provides methods to analyze the data stored in the FATBANDS.nc file.
+    Provides methods to analyze the data stored in the FATBANDS.nc_ file.
 
     Usage example:
 
@@ -37,11 +36,12 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             print(fb.structure)
             fb.plot_fatbands_lview()
 
-    Alternatively, one can use the `abiopen.py` script to open the file in an ipython notebook with
+    Alternatively, one can use the `abiopen.py` script to open the file in an ipython notebook with::
 
-    .. code-block:: shell
+        abiopen.py out_FATBANDS.nc -nb
 
-        $ abiopen.py out_FATBANDS.nc -nb
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: FatBandsFile
     """
     # These class attributes can be redefined in order to customize the plots.
 
@@ -85,7 +85,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     @classmethod
     def from_file(cls, filepath):
-        """Initialize the object from a Netcdf file"""
+        """Initialize the object from a netcdf_ file"""
         return cls(filepath)
 
     def __init__(self, filepath):
@@ -166,7 +166,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     @lazy_property
     def wal_sbk(self):
         """
-        Numpy array of shape [natom, mbesslang, nsppol, mband, nkpt]
+        |numpy-array| of shape [natom, mbesslang, nsppol, mband, nkpt]
         with the L-contributions. Present only if prtdos == 3.
         """
         return self._read_wal_sbk()
@@ -174,7 +174,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     @lazy_property
     def walm_sbk(self):
         """
-        Numpy array of shape [natom, mbesslang**2, nsppol, mband, nkpt]
+        |numpy-array| of shape [natom, mbesslang**2, nsppol, mband, nkpt]
         with the LM-contribution. Present only if prtdos == 3 and prtdosm != 0
         """
         return self._read_walm_sbk(key="dos_fractions_m")
@@ -273,16 +273,22 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     @property
     def ebands(self):
-        """:class:`ElectronBands` object."""
+        """|ElectronBands| object."""
         return self._ebands
 
     @property
     def structure(self):
-        """:class:`Structure` object."""
+        """|Structure| object."""
         return self.ebands.structure
 
+    @lazy_property
+    def params(self):
+        """:class:`OrderedDict` with parameters that might be subject to convergence studies."""
+        od = self.get_ebands_params()
+        return od
+
     def close(self):
-        """Called at the end of the `with` context manager."""
+        """Called at the end of the ``with`` context manager."""
         return self.reader.close()
 
     def __str__(self):
@@ -328,8 +334,8 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     def get_wl_atom(self, iatom, spin=None, band=None):
         """
-        Return the l-dependent DOS weights for atom index `iatom`. The weights are summed over m.
-        If `spin` and `band` are not specified, the method returns the weights
+        Return the l-dependent DOS weights for atom index ``iatom``. The weights are summed over m.
+        If ``spin`` and ``band`` are not specified, the method returns the weights
         for all spin and bands else the contribution for (spin, band)
         """
         if spin is None and band is None:
@@ -341,8 +347,8 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     def get_wl_symbol(self, symbol, spin=None, band=None):
         """
         Return the l-dependent DOS weights for a given type specified in terms of the
-        chemical symbol `symbol`. The weights are summed over m and over all atoms of the same type.
-        If `spin` and `band` are not specified, the method returns the weights
+        chemical symbol ``symbol``. The weights are summed over m and over all atoms of the same type.
+        If ``spin`` and ``band`` are not specified, the method returns the weights
         for all spins and bands else the contribution for (spin, band).
         """
         if spin is None and band is None:
@@ -362,9 +368,9 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     def get_w_symbol(self, symbol, spin=None, band=None):
         """
         Return the DOS weights for a given type specified in terms of the
-        chemical symbol `symbol`. The weights are summed over m and lmax[symbol] and
+        chemical symbol ``symbol``. The weights are summed over m and lmax[symbol] and
         over all atoms of the same type.
-        If `spin` and `band` are not specified, the method returns the weights
+        If ``spin`` and ``band`` are not specified, the method returns the weights
         for all spins and bands else the contribution for (spin, band).
         """
         if spin is None and band is None:
@@ -385,7 +391,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     def get_spilling(self, spin=None, band=None):
         """
         Return the spilling parameter
-        If `spin` and `band` are not specified, the method returns the spilling for all states
+        If ``spin`` and ``band`` are not specified, the method returns the spilling for all states
         as a [nsppol, mband, nkpt] numpy array else the spilling for (spin, band) with shape [nkpt].
         """
         if spin is None and band is None:
@@ -404,8 +410,8 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     def eb_plotax_kwargs(self, spin):
         """
-        Dictionary with the options passed to ebands.plot_ax
-        when plotting a band line with spin index `spin`.
+        Dictionary with the options passed to ``ebands.plot_ax``
+        when plotting a band line with spin index ``spin``.
         Subclasses can redefine the implementation to customize the plots.
         """
         return dict(
@@ -417,24 +423,24 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         )
 
     @add_fig_kwargs
-    def plot_fatbands_siteview(self, e0="fermie", view="inequivalent", fact=1.0,
+    def plot_fatbands_siteview(self, e0="fermie", view="inequivalent", fact=1.0, fontsize=12,
                                ylims=None, blist=None, **kwargs):
         """
-        Plot fatbands for each atom in the unit cell. By default, only the "inequivalent" atoms are shown.
+        Plot fatbands for each atom in the unit cell. By default, only the **inequivalent** atoms are shown.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             view: "inequivalent", "all"
             fact:  float used to scale the stripe size.
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            fontsize: fontsize for titles and legend
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
             blist: List of band indices for the fatband plot. If None, all bands are included
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         # Define num_plots and ax2atom depending on view.
         # ax2natom[1:num_plots] --> iatom index in structure.
@@ -464,17 +470,17 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             ncols = 2
             nrows = num_plots // ncols + num_plots % ncols
 
-        import matplotlib.pyplot as plt
-        fig, axmat = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True, squeeze=False)
+        ax_mat, fig, plt = get_axarray_fig_plt(None, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
         # don't show the last ax if num_plots is odd.
-        if num_plots % ncols != 0: axmat[-1, -1].axis("off")
+        if num_plots % ncols != 0: ax_mat[-1, -1].axis("off")
 
         ebands = self.ebands
         e0 = ebands.get_e0(e0)
         x = np.arange(self.nkpt)
         mybands = range(ebands.mband) if blist is None else blist
 
-        for iax, ax in enumerate(axmat.flat):
+        for iax, ax in enumerate(ax_mat.flat):
             iatom = ax2iatom[iax]
             # Plot the energies.
             for spin in range(self.nsppol):
@@ -500,39 +506,37 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
             set_axlims(ax, ylims, "y")
 
-        axmat[0, 0].legend(loc="best")
+        ax_mat[0, 0].legend(loc="best", shadow=True, fontsize=fontsize)
 
         return fig
 
     @add_fig_kwargs
-    def plot_fatbands_lview(self, e0="fermie", fact=1.0, axmat=None, lmax=None,
-                            ylims=None, blist=None, **kwargs):
+    def plot_fatbands_lview(self, e0="fermie", fact=1.0, ax_mat=None, lmax=None,
+                            ylims=None, blist=None, fontsize=12, **kwargs):
         """
         Plot the electronic fatbands grouped by L.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             fact:  float used to scale the stripe size.
-            axmat: Matrix of axes, if None a new figure is produced.
+            ax_mat: Matrix of axes, if None a new figure is produced.
             lmax: Maximum L included in plot. None means full set available on file.
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
             blist: List of band indices for the fatband plot. If None, all bands are included
+            fontsize: legend and title fontsize.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         mylsize = self.lsize if lmax is None else lmax + 1
         # Build or get grid with (nsppol, mylsize) axis.
-        import matplotlib.pyplot as plt
-        if axmat is None:
-            fig, axmat = plt.subplots(nrows=self.nsppol, ncols=mylsize, sharex=True, sharey=True, squeeze=False)
-        else:
-            axmat = np.reshape(axmat, (self.nsppol, mylsize))
-            fig = plt.gcf()
+        nrows, ncols = self.nsppol, mylsize
+        ax_mat, fig, plt = get_axarray_fig_plt(ax_mat, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
+        ax_mat = np.reshape(ax_mat, (nrows, ncols))
 
         ebands = self.ebands
         e0 = ebands.get_e0(e0)
@@ -541,7 +545,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
         for spin in range(self.nsppol):
             for l in range(mylsize):
-                ax = axmat[spin, l]
+                ax = ax_mat[spin, l]
                 ebands.plot_ax(ax, e0, spin=spin, **self.eb_plotax_kwargs(spin))
                 title = "%s, %s" % (self.l2tex[l], self.spin2tex[spin]) if self.nsppol == 2 else "%s" % self.l2tex[l]
                 ebands.decorate_ax(ax, title=title)
@@ -569,7 +573,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
                 set_axlims(ax, ylims, "y")
 
-        axmat[0, 0].legend(loc="best")
+        ax_mat[0, 0].legend(loc="best", fontsize=fontsize, shadow=True)
         return fig
 
     @add_fig_kwargs
@@ -581,17 +585,16 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         Args:
             iatom: Index of the atom in the structure.
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             fact:  float used to scale the stripe size.
             lmax: Maximum L included in plot. None means full set available on file.
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
             blist: List of band indices for the fatband plot. If None, all bands are included
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         # TODO
         #if self.nsppol == 2:
@@ -658,35 +661,33 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         return fig
 
     @add_fig_kwargs
-    def plot_fatbands_typeview(self, e0="fermie", fact=1.0, lmax=None, axmat=None, ylims=None, blist=None, **kwargs):
+    def plot_fatbands_typeview(self, e0="fermie", fact=1.0, lmax=None, ax_mat=None, ylims=None,
+                              blist=None, fontsize=8, **kwargs):
         """
         Plot the electronic fatbands grouped by atomic type.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             fact:  float used to scale the stripe size.
             lmax: Maximum L included in plot. None means full set available on file.
-            axmat: Matrix of axis. None if a new figure should be created.
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            ax_mat: Matrix of axis. None if a new figure should be created.
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
             blist: List of band indices for the fatband plot. If None, all bands are included
+            fontsize: legend and title fontsize.
 
-        Returns:
-            `matplotlib` figure
-
+        Returns: |matplotlib-Figure|
         """
         mylsize = self.lsize if lmax is None else lmax + 1
 
-        # Get axmat and fig.
-        import matplotlib.pyplot as plt
-        if axmat is None:
-            fig, axmat = plt.subplots(nrows=self.nsppol, ncols=self.ntypat, sharex=True, sharey=True, squeeze=False)
-        else:
-            axmat = np.reshape(axmat, (self.nsppol, self.ntypat))
-            fig = plt.gcf()
+        # Get ax_mat and fig.
+        nrows, ncols = self.nsppol, self.ntypat
+        ax_mat, fig, plt = get_axarray_fig_plt(ax_mat, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
+        ax_mat = np.reshape(ax_mat, (nrows, ncols))
 
         ebands = self.ebands
         e0 = ebands.get_e0(e0)
@@ -696,7 +697,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         for itype, symbol in enumerate(self.symbols):
             wl_sbk = self.get_wl_symbol(symbol) * (fact / 2)
             for spin in range(self.nsppol):
-                ax = axmat[spin, itype]
+                ax = ax_mat[spin, itype]
                 ebands.plot_ax(ax, e0, spin=spin, **self.eb_plotax_kwargs(spin))
 
                 title = ("type=%s, %s" % (symbol, self.spin2tex[spin]) if self.nsppol == 2
@@ -721,35 +722,31 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
                 set_axlims(ax, ylims, "y")
 
-        axmat[0, 0].legend(loc="best")
+        ax_mat[0, 0].legend(loc="best", fontsize=fontsize, shadow=True)
         return fig
 
     @add_fig_kwargs
-    def plot_spilling(self, e0="fermie", fact=1.0, axlist=None, ylims=None, blist=None, **kwargs):
+    def plot_spilling(self, e0="fermie", fact=1.0, ax_list=None, ylims=None, blist=None, **kwargs):
         """
         Plot the electronic fatbands
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             fact:  float used to scale the stripe size.
-            axlist: List of matplotlib axes for plot. If None, new figure is produced
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            ax_list: List of matplotlib axes for plot. If None, new figure is produced
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
             blist: List of band indices for the fatband plot. If None, all bands are included
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
-        import matplotlib.pyplot as plt
-        if axlist is None:
-            fig, axlist = plt.subplots(nrows=1, ncols=self.nsppol, sharex=True, sharey=True, squeeze=False)
-            axlist = axlist.ravel()
-        else:
-            axlist = np.reshape(axlist, (1, self.nsppol)).ravel()
-            fig = plt.gcf()
+        nrows, ncols = 1, self.nsppol
+        ax_list, fig, plt = get_axarray_fig_plt(ax_list, nrows=nrows, ncols=ncols,
+                                                sharex=True, sharey=True, squeeze=False)
+        ax_list = ax_list.ravel()
 
         ebands = self.ebands
         e0 = ebands.get_e0(e0)
@@ -758,7 +755,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         spill_sbk = self.get_spilling() * (fact / 2)
 
         for spin in range(self.nsppol):
-            ax = axlist[spin]
+            ax = ax_list[spin]
             ebands.plot_ax(ax, e0, spin=spin, **self.eb_plotax_kwargs(spin))
             ebands.decorate_ax(ax)
 
@@ -792,7 +789,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     # TODO: THIS CODE IS STILL UNDER DEVELOPMENT
     #@add_fig_kwargs
     #def plot_fatbands_spinor(self, terms=("sigma_z",), e0="fermie", fact=1,
-    #                         ylims=None, blist=None, axlist=None, **kwargs):
+    #                         ylims=None, blist=None, ax_list=None, **kwargs):
     #    """
     #    Plot spinor-resolved electronic fatbands. Require prtdos = 5 and nspinor = 2.
 
@@ -806,26 +803,25 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     #            -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
     #            -  None: Don't shift energies, equivalent to e0=0
     #        fact:  float used to scale the marker size.
-    #        axlist: List of matplotlib axes for plot. If None, new figure is produced
+    #        ax_list: List of matplotlib axes for plot. If None, new figure is produced
     #        ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
     #               or scalar e.g. `left`. If left (right) is None, default values are used
     #        blist: List of band indices for the fatband plot. If None, all bands are included
 
-    #    Returns:
-    #        `matplotlib` figure
+    #    Returns: |matplotlib-Figure|
     #    """
     #    if not (self.prtdos == 5 and self.nspinor == 2):
     #        print("This method assumes prtdos=5 and nspinor=2 but file has prtdos=%s and nspinor=%s"
     #            % (self.prtdos, self.nspinor))
     #        return None
 
-    #    # Build axlist
+    #    # Build ax_list
     #    import matplotlib.pyplot as plt
-    #    if axlist is None:
-    #        fig, axlist = plt.subplots(nrows=len(terms), ncols=1, sharex=True, sharey=True, squeeze=False)
-    #        axlist = axlist.ravel()
+    #    if ax_list is None:
+    #        fig, ax_list = plt.subplots(nrows=len(terms), ncols=1, sharex=True, sharey=True, squeeze=False)
+    #        ax_list = ax_list.ravel()
     #    else:
-    #        axlist = np.reshape(axlist, (1, len(terms))).ravel()
+    #        ax_list = np.reshape(ax_list, (1, len(terms))).ravel()
     #        fig = plt.gcf()
 
     #    ebands = self.ebands
@@ -841,7 +837,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     #    # TODO: To be tested.
     #    terms = list_strings(terms)
-    #    for i, (term, ax) in enumerate(zip(terms, axlist)):
+    #    for i, (term, ax) in enumerate(zip(terms, ax_list)):
     #        ebands.plot_ax(ax, e0, spin=spin0, color=self.linecolor, linewidth=self.linewidth)
     #        ebands.decorate_ax(ax, title=term)
     #        if i != 0:
@@ -876,7 +872,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     #        set_axlims(ax, ylims, "y")
 
-    #    axlist[0].legend(loc="best")
+    #    ax_list[0].legend(loc="best", fontsize=fontsize, shadow=True)
     #    return fig
 
     # TODO: THIS CODE IS STILL UNDER DEVELOPMENT
@@ -937,16 +933,16 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     @add_fig_kwargs
     def plot_pjdos_lview(self, e0="fermie", lmax=None, method="gaussian", step=0.1, width=0.2,
-                         stacked=True, combined_spins=True, axmat=None, exchange_xy=False,
-                         with_info=True, with_spin_sign=True, xlims=None, ylims=None, **kwargs):
+                         stacked=True, combined_spins=True, ax_mat=None, exchange_xy=False,
+                         with_info=True, with_spin_sign=True, xlims=None, ylims=None, fontsize=8, **kwargs):
         """
         Plot the PJ-DOS on a linear mesh.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             lmax: Maximum L included in plot. None means full set available on file.
             method: String defining the method for the computation of the DOS.
             step: Energy step (eV) of the linear mesh.
@@ -956,14 +952,14 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                 If True, up/down DOSes are plotted on the same figure (positive values for up,
                 negative values for down component)
                 If False, up/down components are plotted on different axes.
-            axmat:
+            ax_mat:
             exchange_xy: True if the dos should be plotted on the x axis instead of y.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
-            ylims: Same meaning as `xlims` but for the y-axis
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
+            ylims: Same meaning as ``xlims`` but for the y-axis
+            fontsize: Legend and label fontsize
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         try:
             intg = self.get_dos_integrator(method, step, width)
@@ -984,21 +980,19 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
         # Get grid of axes.
         mylsize = self.lsize if lmax is None else lmax + 1
-        import matplotlib.pyplot as plt
         nrows = self.nsppol if not combined_spins else 1
-        if axmat is None:
-            fig, axmat = plt.subplots(nrows=nrows, ncols=mylsize, sharex=True, sharey=True, squeeze=False)
-        else:
-            axmat = np.reshape(axmat, (nrows, mylsize))
-            fig = plt.gcf()
+        ncols = mylsize
+        ax_mat, fig, plt = get_axarray_fig_plt(ax_mat, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
+        ax_mat = np.reshape(ax_mat, (nrows, ncols))
 
         # The code below expectes a matrix of axes of shape[nsppol, self.lsize]
         # If spins are plotted on the same graph (combined_spins), I build a new matrix so that
-        # axmat[spin=0] is axmat[spin=1] and aliased_axis is set to True
+        # ax_mat[spin=0] is ax_mat[spin=1] and aliased_axis is set to True
         aliased_axis = False
         if self.nsppol == 2 and combined_spins:
             aliased_axis = True
-            axmat = np.array([axmat.ravel(), axmat.ravel()])
+            ax_mat = np.array([ax_mat.ravel(), ax_mat.ravel()])
 
         spin_sign = +1
         if not stacked:
@@ -1008,7 +1002,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                     if with_spin_sign: spin_sign = +1 if spin == 0 else -1
                     # Loop over the columns of the grid.
                     for l in range(min(self.lmax_symbol[symbol] + 1, mylsize)):
-                        ax = axmat[spin, l]
+                        ax = ax_mat[spin, l]
 
                         # Plot total DOS.
                         x, y = mesh, spin_sign * edos.spin_dos[spin].values
@@ -1034,7 +1028,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             for l in range(mylsize):
                 for spin in self.ebands.spins:
                     if with_spin_sign: spin_sign = +1 if spin == 0 else -1
-                    ax = axmat[spin, l]
+                    ax = ax_mat[spin, l]
 
                     # Plot total DOS.
                     x, y = mesh, spin_sign * edos.spin_dos[spin].values
@@ -1060,14 +1054,14 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             if aliased_axis and spin == 1: break # Don't repeat yourself!
 
             for l in range(mylsize):
-                ax = axmat[spin, l]
+                ax = ax_mat[spin, l]
                 if with_info:
                     if combined_spins:
                         title = self.l2tex[l]
                     else:
                         title = "%s, %s" % (self.l2tex[l], self.spin2tex[spin]) if self.nsppol == 2 else \
                                  self.l2tex[l]
-                    ax.set_title(title)
+                    ax.set_title(title, fontsize=fontsize)
                 ax.grid(True)
 
                 # Display yticklabels on the first plot and last plot only.
@@ -1075,7 +1069,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                 ax.set_xlabel("Energy [eV]")
                 if l == 0:
                     if with_info:
-                        ax.legend(loc="best")
+                        ax.legend(loc="best", fontsize=fontsize, shadow=True)
                         if exchange_xy:
                             ax.set_xlabel('DOS [states/eV]')
                         else:
@@ -1095,16 +1089,16 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
     @add_fig_kwargs
     def plot_pjdos_typeview(self, e0="fermie", lmax=None, method="gaussian", step=0.1, width=0.2,
-                            stacked=True, combined_spins=True, axmat=None, exchange_xy=False,
-                            with_info=True, with_spin_sign=True, xlims=None, ylims=None, **kwargs):
+                            stacked=True, combined_spins=True, ax_mat=None, exchange_xy=False,
+                            with_info=True, with_spin_sign=True, xlims=None, ylims=None, fontsize=8, **kwargs):
         """
         Plot the PJ-DOS on a linear mesh.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
             lmax: Maximum L included in plot. None means full set available on file.
             method: String defining the method for the computation of the DOS.
             step: Energy step (eV) of the linear mesh.
@@ -1114,14 +1108,14 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                 If True, up/down DOSes are plotted on the same figure (positive values for up,
                 negative values for down component)
                 If False, up/down components are plotted on different axes.
-            axmat:
+            ax_mat:
             exchange_xy: True if the dos should be plotted on the x axis instead of y.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
-            ylims: Same meaning as `xlims` but for the y-axis
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
+            ylims: Same meaning as ``xlims`` but for the y-axis
+            fontsize: Legend and label fontsize.
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         mylsize = self.lsize if lmax is None else lmax + 1
 
@@ -1143,21 +1137,19 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         edos, symbols_lso = intg.edos, intg.symbols_lso
 
         # Get grid of axes.
-        import matplotlib.pyplot as plt
         nrows = self.nsppol if not combined_spins else 1
-        if axmat is None:
-            fig, axmat = plt.subplots(nrows=nrows, ncols=self.ntypat, sharex=True, sharey=True, squeeze=False)
-        else:
-            axmat = np.reshape(axmat, (nrows, self.ntypat))
-            fig = plt.gcf()
+        ncols = self.ntypat
+        ax_mat, fig, plt = get_axarray_fig_plt(ax_mat, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
+        ax_mat = np.reshape(ax_mat, (nrows, ncols))
 
         # The code below expectes a matrix of axes of shape[nsppol, self.ntypat]
         # If spins are plotted on the same graph (combined_spins), I build a new matrix so that
-        # axmat[spin=0] is axmat[spin=1] and aliased_axis is set to True
+        # ax_mat[spin=0] is ax_mat[spin=1] and aliased_axis is set to True
         aliased_axis = False
         if self.nsppol == 2 and combined_spins:
             aliased_axis = True
-            axmat = np.array([axmat.ravel(), axmat.ravel()])
+            ax_mat = np.array([ax_mat.ravel(), ax_mat.ravel()])
 
         spin_sign = +1
         if not stacked:
@@ -1165,7 +1157,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                 if with_spin_sign: spin_sign = +1 if spin == 0 else -1
                 # Loop over the columns of the grid.
                 for isymb, symbol in enumerate(self.symbols):
-                    ax = axmat[spin, isymb]
+                    ax = ax_mat[spin, isymb]
 
                     # Plot total DOS.
                     x, y = mesh, spin_sign * edos.spin_dos[spin].values
@@ -1192,7 +1184,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             for spin in range(self.nsppol):
                 if with_spin_sign: spin_sign = +1 if spin == 0 else -1
                 for isymb, symbol in enumerate(self.symbols):
-                    ax = axmat[spin, isymb]
+                    ax = ax_mat[spin, isymb]
 
                     # Plot total DOS.
                     x, y = mesh, spin_sign * edos.spin_dos[spin].values
@@ -1218,13 +1210,13 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             if aliased_axis and spin == 1: break # Don't repeat yourself!
 
             for itype, symbol in enumerate(self.symbols):
-                ax = axmat[spin, itype]
+                ax = ax_mat[spin, itype]
                 if with_info:
                     if combined_spins:
                         title = "Type: %s" % symbol
                     else:
                         title = "%s, %s" % (symbol, self.spin2tex[spin]) if self.nsppol == 2 else symbol
-                    ax.set_title(title)
+                    ax.set_title(title, fontsize=fontsize)
                 ax.grid(True)
 
                 # Display yticklabels on the first plot and last plot only.
@@ -1232,7 +1224,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                 ax.set_xlabel("Energy [eV]")
                 if itype == 0:
                     if with_info:
-                        ax.legend(loc="best")
+                        ax.legend(loc="best", fontsize=fontsize, shadow=True)
                         if exchange_xy:
                             ax.set_xlabel('DOS [states/eV]')
                         else:
@@ -1253,27 +1245,27 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     @add_fig_kwargs
     def plot_fatbands_with_pjdos(self, e0="fermie", fact=1.0, lmax=None, blist=None, view="type",
                                  pjdosfile=None, edos_kwargs=None, stacked=True, width_ratios=(2, 1),
-                                 ylims=None, **kwargs):
+                                 fontsize=8, ylims=None, **kwargs):
         """
         Compute the fatbands and the PJDOS on the same figure, a.k.a the Sistine Chapel.
 
         Args:
             e0: Option used to define the zero of energy in the band structure plot. Possible values:
-                - `fermie`: shift all eigenvalues to have zero energy at the Fermi energy.
-                -  Number e.g e0=0.5: shift all eigenvalues to have zero energy at 0.5 eV
-                -  None: Don't shift energies, equivalent to e0=0
-            fact:  float used to scale the stripe size.
+                - ``fermie``: shift all eigenvalues to have zero energy at the Fermi energy.
+                -  Number e.g ``e0 = 0.5``: shift all eigenvalues to have zero energy at 0.5 eV
+                -  None: Don't shift energies, equivalent to ``e0 = 0``
+            fact: float used to scale the stripe size.
             lmax: Maximum L included in plot. None means full set available on file.
             blist: List of band indices for the fatband plot. If None, all bands are included
             pjdosfile: FATBANDS file used to compute the PJDOS. If None, the PJDOS is taken from self.
             edos_kwargs:
             stacked: True if DOS partial contributions should be stacked on top of each other.
             width_ratios: Defines the ratio between the band structure plot and the dos plot.
-            ylims: Set the data limits for the y-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            fontsize: Legend and label fontsize.
+            ylims: Set the data limits for the y-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         closeit = False
         if pjdosfile is not None:
@@ -1318,16 +1310,16 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
 
         # Plot bands on fatbands_axmat and PJDOS on pjdos_axmat.
         if view == "lview":
-            self.plot_fatbands_lview(e0=e0, fact=fact, lmax=lmax, blist=blist, axmat=fatbands_axmat, ylims=ylims, show=False)
-            pjdosfile.plot_pjdos_lview(e0=e0, lmax=lmax, axmat=pjdos_axmat, exchange_xy=True,
-                                       stacked=stacked, combined_spins=False,
+            self.plot_fatbands_lview(e0=e0, fact=fact, lmax=lmax, blist=blist, ax_mat=fatbands_axmat, ylims=ylims, show=False)
+            pjdosfile.plot_pjdos_lview(e0=e0, lmax=lmax, ax_mat=pjdos_axmat, exchange_xy=True,
+                                       stacked=stacked, combined_spins=False, fontsize=fontsize,
                                        with_info=False, with_spin_sign=False, show=False, ylims=ylims,
                                        **edos_kwargs)
 
         elif view == "type":
-            self.plot_fatbands_typeview(e0=e0, fact=fact, lmax=lmax, blist=blist, axmat=fatbands_axmat, ylims=ylims, show=False)
-            pjdosfile.plot_pjdos_typeview(e0=e0, lmax=lmax, axmat=pjdos_axmat, exchange_xy=True,
-                                          stacked=stacked, combined_spins=False,
+            self.plot_fatbands_typeview(e0=e0, fact=fact, lmax=lmax, blist=blist, ax_mat=fatbands_axmat, ylims=ylims, show=False)
+            pjdosfile.plot_pjdos_typeview(e0=e0, lmax=lmax, ax_mat=pjdos_axmat, exchange_xy=True,
+                                          stacked=stacked, combined_spins=False, fontsize=fontsize,
                                           with_info=False, with_spin_sign=False, show=False, ylims=ylims,
                                           **edos_kwargs)
         else:
@@ -1354,11 +1346,10 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             method: String defining the method for the computation of the DOS.
             step: Energy step (eV) of the linear mesh.
             width: Standard deviation (eV) of the gaussian.
-            xlims: Set the data limits for the x-axis. Accept tuple e.g. `(left, right)`
-                   or scalar e.g. `left`. If left (right) is None, default values are used
+            xlims: Set the data limits for the x-axis. Accept tuple e.g. ``(left, right)``
+                   or scalar e.g. ``left``. If left (right) is None, default values are used
 
-        Returns:
-            `matplotlib` figure
+        Returns: |matplotlib-Figure|
         """
         if self.usepaw != 1:
             print("This is not a PAW calculation!")
@@ -1414,9 +1405,10 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
         pwdos_al = totdos_al - paw1dos_al + pawt1dos_al
 
         # Build plot grid.
-        import matplotlib.pyplot as plt
-        fig, axmat = plt.subplots(nrows=np.count_nonzero(self.has_atom), ncols=self.lsize,
-                                  sharex=True, sharey=True, squeeze=False)
+        nrows, ncols = np.count_nonzero(self.has_atom), self.lsize
+        ax_mat, fig, plt = get_axarray_fig_plt(ax_mat, nrows=nrows, ncols=ncols,
+                                               sharex=True, sharey=True, squeeze=False)
+        ax_mat = np.reshape(ax_mat, (nrows, ncols))
 
         irow = -1
         for iatom in range(self.natom):
@@ -1424,7 +1416,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
             irow += 1
             #for l in range(min(self.lmax_atom[iatom] + 1, mylsize)):
             for l in range(min(self.lsize, mylsize)):
-                ax = axmat[irow, l]
+                ax = ax_mat[irow, l]
                 if l >= self.lmax_atom[iatom]+1:
                     # don't show this plots and cycle
                     ax.axis("off")
@@ -1447,7 +1439,7 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
                     ax.plot(mesh, pawt1dos_al[iatom, l, spin] * spin_sign, color="g",
                             label="PS-onsite" if (irow, l, spin) == (0, 0, 0) else None)
 
-        for ax in axmat[-1, :]:
+        for ax in ax_mat[-1, :]:
             ax.set_xlabel('Energy [eV]')
             set_axlims(ax, xlims, "x")
 
@@ -1529,13 +1521,13 @@ class FatBandsFile(AbinitNcFile, Has_Header, Has_Structure, Has_ElectronBands, N
     #    ax.grid(True)
     #    ax.set_xlabel("Energy [eV]")
     #    set_axlims(ax, xlims, "x")
-    #    ax.legend(loc="best")
+    #    ax.legend(loc="best", fontsize=fontsize, shadow=True)
 
     #    return fig
 
     def write_notebook(self, nbpath=None):
         """
-        Write an ipython notebook to nbpath. If nbpath is None, a temporay file in the current
+        Write a jupyter_ notebook to nbpath. If nbpath is None, a temporay file in the current
         working directory is created. Return path to the notebook.
         """
         nbformat, nbv, nb = self.get_nbformat_nbv_nb(title=None)
@@ -1645,7 +1637,7 @@ class _DosIntegrator(object):
     @lazy_property
     def ls_stackdos(self):
         """
-        Compute `ls_stackdos` datastructure for stacked DOS.
+        Compute ``ls_stackdos`` datastructure for stacked DOS.
         ls_stackdos maps (l, spin) onto a numpy array [nsymbols, nfreqs] where
         [isymb, :] contains the cumulative sum of the PJDOS(l,s) up to symbol isymb.
         """
@@ -1668,8 +1660,8 @@ class _DosIntegrator(object):
 
     def get_lstack_symbol(self, symbol, spin):
         """
-        Return numpy array with the cumulative sum over l for a given
-        atom type (specified by chemical symbol) and spin.
+        Return |numpy-array| with the cumulative sum over l for a given
+        atom type (specified by the chemical symbol ``symbol``) and spin.
         """
         lso = self.symbols_lso[symbol][:, spin]
         return lso.cumsum(axis=0)

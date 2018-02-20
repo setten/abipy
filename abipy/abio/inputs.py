@@ -9,6 +9,7 @@ import collections
 import warnings
 import itertools
 import copy
+import time
 import six
 import abc
 import json
@@ -26,7 +27,7 @@ except ImportError:
 from abipy.core.structure import Structure
 from abipy.core.mixins import Has_Structure
 from abipy.core.kpoints import has_timrev_from_kptopt
-from abipy.htc.variable import InputVariable
+from abipy.abio.variable import InputVariable
 from abipy.abio.abivars import is_abivar, is_anaddb_var
 from abipy.abio.abivars_db import get_abinit_variables
 from abipy.abio.input_tags import *
@@ -136,7 +137,7 @@ class AbstractInput(six.with_metaclass(abc.ABCMeta, MutableMapping, object)):
 
     def write(self, filepath="run.abi"):
         """
-        Write the input file to file to `filepath`.
+        Write the input file to file to ``filepath``.
         """
         dirname = os.path.dirname(filepath)
         if not os.path.exists(dirname): os.makedirs(dirname)
@@ -182,7 +183,7 @@ class AbstractInput(six.with_metaclass(abc.ABCMeta, MutableMapping, object)):
 
     def add_abiobjects(self, *abi_objects):
         """
-        This function receive a list of `AbiVarable` objects and add
+        This function receive a list of ``AbiVarable`` objects and add
         the corresponding variables to the input.
         """
         d = {}
@@ -246,10 +247,10 @@ class AbstractInput(six.with_metaclass(abc.ABCMeta, MutableMapping, object)):
 
         Args:
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
-            `namedtuple` with the following attributes:
+            ``namedtuple`` with the following attributes:
 
                 retcode: Return code. 0 if OK.
                 output_file: output file of the run.
@@ -258,14 +259,43 @@ class AbstractInput(six.with_metaclass(abc.ABCMeta, MutableMapping, object)):
                 task: Task object
         """
 
+    def generate(self, **kwargs):
+        """
+        This function generates new inputs by replacing the variables specified in kwargs.
+
+        Args:
+            kwargs: keyword arguments with the values used for each variable.
+
+        .. code-block:: python
+
+            gs_inp = call_function_to_generate_initial_template()
+
+            # To generate two input files with different values of ecut:
+            for inp_ecut in gs_inp.generate(ecut=[10, 20]):
+                print("do something with inp_ecut %s" % inp_ecut)
+
+            # To generate four input files with all the possible combinations of ecut and nsppol:
+            for inp_ecut in gs_inpt.generate(ecut=[10, 20], nsppol=[1, 2]):
+                print("do something with inp_ecut %s" % inp_ecut)
+        """
+        for new_vars in product_dict(kwargs):
+            new_inp = self.deepcopy()
+            # Remove the variable names to avoid annoying warnings if the variable is overwritten.
+            new_inp.remove_vars(new_vars.keys())
+            new_inp.set_vars(**new_vars)
+            yield new_inp
+
 
 class AbinitInputError(Exception):
-    """Base error class for exceptions raised by `AbinitInput`"""
+    """Base error class for exceptions raised by ``AbinitInput``."""
 
 
 class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_Structure, object)):
     """
     This object stores the ABINIT variables for a single dataset.
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: AbinitInput
     """
     Error = AbinitInputError
 
@@ -273,11 +303,11 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
                  abi_kwargs=None, tags=None):
         """
         Args:
-            structure: Parameters defining the crystalline structure. Accepts :class:`Structure` object
+            structure: Parameters defining the crystalline structure. Accepts |Structure| object
             file with structure (CIF, netcdf file, ...) or dictionary with ABINIT geo variables.
             pseudos: Pseudopotentials to be used for the calculation. Accepts: string or list of strings
-                with the name of the pseudopotential files, list of :class:`Pseudo` objects
-                or :class:`PseudoTable` object.
+                with the name of the pseudopotential files, list of |Pseudo| objects
+                or |PseudoTable| object.
             pseudo_dir: Name of the directory where the pseudopotential files are located.
             ndtset: Number of datasets.
             comment: Optional string with a comment that will be placed at the beginning of the file.
@@ -422,7 +452,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
     @property
     def runlevel(self):
         """
-        A Set of strings defining the type of run of the current input.
+        A set of strings defining the type of run of the current input.
         """
         optdriver = self.get("optdriver")
 
@@ -643,6 +673,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
     @property
     def comment(self):
+        """Optional string with comment. None if comment is not set."""
         try:
             return self._comment
         except AttributeError:
@@ -654,10 +685,11 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
     @property
     def structure(self):
-        """The :class:`Structure` associated to this input."""
+        """The |Structure| object associated to this input."""
         return self._structure
 
     def set_structure(self, structure):
+        """Set structure."""
         self._structure = Structure.as_structure(structure)
 
         # Check volume
@@ -836,7 +868,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
     @property
     def pseudos(self):
-        """List of :class:`Pseudo` objects."""
+        """List of |Pseudo| objects."""
         return self._pseudos
 
     @property
@@ -871,10 +903,8 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
                 In that case, the sequence consists of all but the last of ``ndtset + 1``
                 evenly spaced samples, so that `stop` is excluded.  Note that the step
                 size changes when `endpoint` is False.
-            num : int, optional
-                Number of samples to generate. Default is 50.
-            endpoint : bool, optional
-                If True, `stop` is the last sample. Otherwise, it is not included.
+            num (int): Number of samples to generate. Default is 50.
+            endpoint (bool): optional. If True, `stop` is the last sample. Otherwise, it is not included.
                 Default is True.
         """
         inps = []
@@ -962,11 +992,11 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
     def new_with_structure(self, new_structure, scdims=None, verbose=1):
         """
-        Return a new :class:`AbinitInput` with different structure.
+        Return a new |AbinitInput| with different structure.
         See notes below for the constraints that must be fulfilled by the new structure
 
         Args:
-            new_structure: Parameters defining the crystalline structure. Accepts :class:`Structure` object
+            new_structure: Parameters defining the crystalline structure. Accepts |Structure| object
                 file with structure (CIF, netcdf file, ...) or dictionary with ABINIT geo variables.
             scdims: 3 integer giving with the number of cells in the supercell along the three reduced directions.
                 Must be used when `new_structure` represents a supercell of the initial structure defined
@@ -975,7 +1005,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         .. warning::
 
-            If `scdims` is None (i.e. no supercell), the two structures must have the same value of
+            If ``scdims`` is None (i.e. no supercell), the two structures must have the same value of
             `natom` and `typat`, they can only differ at the level of the lattice and of the atomic positions.
             When structure represents a supercell, `scdims` must be coherent with the `new_structure` passed
             as argument.
@@ -988,7 +1018,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             errors = []
             for i, (site1, site2) in enumerate(zip(self.structure, new_structure)):
                 if site1.specie.symbol != site2.specie.symbol:
-                    errors.append("[%d] %s != %s" % (i, site1.specie.symbol != site2.specie.symbol))
+                    errors.append("[%d] %s != %s" % (i, site1.specie.symbol, site2.specie.symbol))
             if errors:
                 raise ValueError("Structures must have same order of atomic types:\n" + "\n".join(errors))
 
@@ -1066,7 +1096,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
     def new_with_decorators(self, decorators):
         """
         This function receives a list of :class:`AbinitInputDecorator` objects or just a single object,
-        applies the decorators to the input and returns a new :class:`AbinitInput` object. self is not changed.
+        applies the decorators to the input and returns a new |AbinitInput| object. self is not changed.
         """
         if not isinstance(decorators, (list, tuple)): decorators = [decorators]
 
@@ -1091,6 +1121,13 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         """
         return self.remove_vars(_IRDVARS, strict=False)
 
+    #def pop_relax_vars(self):
+    #    """
+    #    Remove all the `ird*` variables present in self.
+    #    Return dictionary with the variables that have been removed.
+    #    """
+    #    return scf_input.pop_vars(["ionmov", "optcell", "ntime", "dilatmx"])
+
     @property
     def scf_tolvar(self):
         """
@@ -1107,7 +1144,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         return tolvar, value
 
-    def make_ph_inputs_qpoint(self, qpt, tolerance=None):
+    def make_ph_inputs_qpoint(self, qpt, tolerance=None, manager=None):
         """
         This functions builds and returns a list of input files
         for the calculation of phonons at the given q-point `qpt`.
@@ -1117,9 +1154,10 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             qpt: q-point in reduced coordinates.
             tolerance: dict {varname: value} with the tolerance to be used in the DFPT run.
                 Defaults to {"tolvrs": 1.0e-10}.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
-            List of `AbinitInput` objects for DFPT runs.
+            List of |AbinitInput| objects for DFPT runs.
 
         .. WARNING::
 
@@ -1133,7 +1171,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             raise self.Error("Invalid tolerance: %s" % str(tolerance))
 
         # Call Abinit to get the list of irred perts.
-        perts = self.abiget_irred_phperts(qpt=qpt)
+        perts = self.abiget_irred_phperts(qpt=qpt, manager=manager)
 
         # Build list of datasets (one input per perturbation)
         # Remove iscf if any (required if we pass an input for NSCF calculation)
@@ -1173,7 +1211,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
                 Defaults to {"tolwfr": 1.0e-22}.
 
         Return:
-            List of AbinitInput objects for DFPT runs.
+            List of |AbinitInput| objects for DFPT runs.
         """
         if tolerance is None:
             tolerance = {"tolwfr": 1.0e-22}
@@ -1208,7 +1246,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         return ddk_inputs
 
-    def make_dde_inputs(self, tolerance=None, use_symmetries=True):
+    def make_dde_inputs(self, tolerance=None, use_symmetries=True, manager=None):
         """
         Return inputs for the calculation of the electric field perturbations.
         This functions should be called with an input the represents a gs run.
@@ -1218,9 +1256,10 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
                 Defaults to {"tolwfr": 1.0e-22}.
             use_symmetries: boolean that computes the irreducible components of the perturbation.
                 Default to True. Should be set to False for nonlinear coefficients calculation.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
-            List of `AbinitInput` objects for DFPT runs.
+            List of |AbinitInput| objects for DFPT runs.
         """
         if tolerance is None:
             tolerance = {"tolvrs": 1.0e-22}
@@ -1230,7 +1269,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         if use_symmetries == True:
             # Call Abinit to get the list of irred perts.
-            perts = self.abiget_irred_ddeperts()
+            perts = self.abiget_irred_ddeperts(manager=manager)
 
             # Build list of datasets (one input per irreducible perturbation)
             multi = MultiDataset.replicate_input(input=self, ndtset=len(perts))
@@ -1270,7 +1309,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         return multi
 
-    def make_dte_inputs(self, phonon_pert=False, skip_permutations=False):
+    def make_dte_inputs(self, phonon_pert=False, skip_permutations=False, manager=None):
         """
         Return inputs for the DTE calculation.
         This functions should be called with an input that represents a GS run.
@@ -1280,9 +1319,10 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             skip_permutations: Since the current version of abinit always performs all the permutations
                 of the perturbations, even if only one is asked, if True avoids the creation of inputs that
                 will produce duplicated outputs.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
         """
         # Call Abinit to get the list of irred perts.
-        perts = self.abiget_irred_dteperts(phonon_pert=phonon_pert)
+        perts = self.abiget_irred_dteperts(phonon_pert=phonon_pert, manager=manager)
 
         if skip_permutations:
             perts_to_skip = []
@@ -1336,11 +1376,11 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         return multi
 
-    def make_bec_inputs(self, tolerance=None):
+    def make_bec_inputs(self, tolerance=None, manager=None):
         """
         Return inputs for the calculation of the Born effective charges.
 
-        This functions should be called with an input the represents a gs run.
+        This functions should be called with an input that represents a GS run.
         """
         if tolerance is None:
             tolerance = {"tolvrs": 1.0e-10}
@@ -1351,7 +1391,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         # Call Abinit to get the list of irred perts.
         # TODO:
         # Check that one can use the same list of irred perts as in phonons
-        perts = self.abiget_irred_phperts(qpt=(0, 0, 0))
+        perts = self.abiget_irred_phperts(qpt=(0, 0, 0), manager=manager)
 
         # Build list of datasets (one input per perturbation)
         multi = MultiDataset.replicate_input(input=self, ndtset=len(perts))
@@ -1376,13 +1416,13 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         return multi
 
-    def make_strain_perts_inputs(self, tolerance=None):
+    def make_strain_perts_inputs(self, tolerance=None, manager=None):
         if tolerance is None:
             tolerance = {"tolvrs": 1.0e-12}
         if len(tolerance) != 1 or any(k not in _TOLVARS for k in tolerance):
             raise self.Error("Invalid tolerance: {}".format(str(tolerance)))
 
-        perts = self.abiget_irred_strainperts(kptopt=2)
+        perts = self.abiget_irred_strainperts(kptopt=2, manager=manager)
 
         # Build list of datasets (one input per perturbation)
         multi = MultiDataset.replicate_input(input=self, ndtset=len(perts))
@@ -1434,7 +1474,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         Args:
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
             `namedtuple` with the following attributes:
@@ -1458,16 +1498,19 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         Args:
             tolsym: Abinit tolsym input variable. None correspondes to the default value.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
-            Structure object with AbinitSpaceGroup obtained from the main output file.
+            |Structure| object with AbinitSpaceGroup obtained from the main output file.
         """
         # Avoid modifications in self.
         inp = self.deepcopy()
         if tolsym is not None: inp["tolsym"] = float(tolsym)
+
         # Bypass Abinit check as we always want to return results.
         inp["chksymbreak"] = 0
+        # Disable memory check.
+        inp["mem_test"] = 0
 
         # Build a Task to run Abinit in --dry-run mode.
         task = AbinitTask.temp_shell_task(inp, workdir=workdir, manager=manager)
@@ -1491,12 +1534,12 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: List of shifts (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Returns:
             `namedtuple` with attributes:
-                points: `ndarray` with points in the IBZ in reduced coordinates.
-                weights: `ndarray` with weights of the points.
+                points: |numpy-array| with points in the IBZ in reduced coordinates.
+                weights: |numpy-array| with weights of the points.
         """
         # Avoid modifications in self.
         inp = self.deepcopy()
@@ -1505,6 +1548,8 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         inp["prtkpt"] = -2
         # Bypass Abinit check as we always want to return results.
         inp["chksymbreak"] = 0
+        # Disable memory check.
+        inp["mem_test"] = 0
 
         if ngkpt is not None: inp["ngkpt"] = ngkpt
         if shiftk is not None:
@@ -1512,6 +1557,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             inp.set_vars(shiftk=shiftk, nshiftk=len(shiftk))
 
         if kptopt is not None: inp["kptopt"] = kptopt
+        #print("Computing ibz with input:\n", str(inp))
 
         # Build a Task to run Abinit in a shell subprocess
         task = AbinitTask.temp_shell_task(inp, workdir=workdir, manager=manager)
@@ -1584,7 +1630,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: Shiftks (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Returns:
             List of dictionaries with the Abinit variables defining the irreducible perturbation
@@ -1616,6 +1662,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         )
 
         if kptopt is not None: inp["kptopt"] = kptopt
+        #print("Computing irred_perts with input:\n", str(inp))
 
         # Build a Task to run Abinit in a shell subprocess
         task = AbinitTask.temp_shell_task(inp, workdir=workdir, manager=manager)
@@ -1625,7 +1672,13 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
         try:
             return yaml_read_irred_perts(task.log_file.path)
         except Exception as exc:
-            self._handle_task_exception(task, exc)
+            # Sometimes the previous call raises: Cannot find next YAML document in /tmp/tmpskvdr_bo/run.log
+            # perhaps because the log file is still being written (?) so let's wait a bit.
+            time.sleep(5.0)
+            try:
+                return yaml_read_irred_perts(task.log_file.path)
+            except Exception as exc:
+                self._handle_task_exception(task, exc)
 
     def abiget_irred_phperts(self, qpt=None, ngkpt=None, shiftk=None, kptopt=None, workdir=None, manager=None):
         """
@@ -1639,15 +1692,15 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: Shiftks (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Returns:
             List of dictionaries with the Abinit variables defining the irreducible perturbation
-            Example:
+
+        Example:
 
                 [{'idir': 1, 'ipert': 1, 'qpt': [0.25, 0.0, 0.0]},
                  {'idir': 2, 'ipert': 1, 'qpt': [0.25, 0.0, 0.0]}]
-
         """
         phperts_vars = dict(rfphon=1,                         # Will consider phonon-type perturbation
                             rfatpol=[1, len(self.structure)], # Set of atoms to displace.
@@ -1667,14 +1720,15 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: Shiftks (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Returns:
             List of dictionaries with the Abinit variables defining the irreducible perturbation
-            Example:
 
-                [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
-                 {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
+        Example:
+
+            [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
+             {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
 
         """
         ddeperts_vars = dict(rfphon=0,  # No phonon-type perturbation
@@ -1696,15 +1750,16 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: Shiftks (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
             phonon_pert: if True also the phonon perturbations will be considered. Default False.
 
         Returns:
             List of dictionaries with the Abinit variables defining the irreducible perturbation
-            Example:
 
-                [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
-                 {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
+        Example:
+
+            [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
+             {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
 
         """
         dteperts_vars = dict(d3e_pert1_phon=1 if phonon_pert else 0,           # phonon-type perturbation
@@ -1734,15 +1789,15 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
             shiftk: Shiftks (default None i.e. use shiftk from self)
             kptopt: Option for k-point generation. If None, the value in self is used.
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Returns:
             List of dictionaries with the Abinit variables defining the irreducible perturbation
-            Example:
 
-                [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
-                 {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
+        Example:
 
+            [{'idir': 1, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]},
+             {'idir': 2, 'ipert': 4, 'qpt': [0.0, 0.0, 0.0]}]
         """
         strainperts_vars = dict(rfphon=1,                        # No phonon-type perturbation
                                 rfatpol=(1,len(self.structure)), # Perturbation of all atoms
@@ -1774,7 +1829,7 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
     def abiget_autoparal_pconfs(self, max_ncpus, autoparal=1, workdir=None, manager=None, verbose=0):
         """
-        Get all the possible configurations up to max_ncpus
+        Get all the possible configurations up to ``max_ncpus``.
         Return list of parallel configurations.
         """
         inp = self.deepcopy()
@@ -1782,6 +1837,8 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
         # Bypass Abinit check as we always want to return results.
         inp["chksymbreak"] = 0
+        # Disable memory check.
+        inp["mem_test"] = 0
 
         # Run the job in a shell subprocess with mpi_procs = 1
         # Return code is always != 0
@@ -1826,11 +1883,11 @@ class AbinitInput(six.with_metaclass(abc.ABCMeta, AbstractInput, MSONable, Has_S
 
 class MultiDataset(object):
     """
-    This object is essentially a list of :class:`AbinitInput` objects.
+    This object is essentially a list of |AbinitInput| objects.
     that provides an easy-to-use interface to apply global changes to the
     the inputs stored in the objects.
 
-    Let's assume for example that multi contains two `AbinitInput` objects and we
+    Let's assume for example that multi contains two ``AbinitInput`` objects and we
     want to set `ecut` to 1 in both dictionaries. The direct approach would be:
 
         for inp in multi:
@@ -1864,7 +1921,7 @@ class MultiDataset(object):
 
     @classmethod
     def from_inputs(cls, inputs):
-        """Build object from a list of :class:`AbinitInput` objects."""
+        """Build object from a list of |AbinitInput| objects."""
         for inp in inputs:
             if any(p1 != p2 for p1, p2 in zip(inputs[0].pseudos, inp.pseudos)):
                 raise ValueError("Pseudos must be consistent when from_inputs is invoked.")
@@ -1882,7 +1939,7 @@ class MultiDataset(object):
 
     @classmethod
     def replicate_input(cls, input, ndtset):
-        """Construct a multidataset with ndtset from the :class:`AbinitInput` input."""
+        """Construct a multidataset with ndtset from the |AbinitInput| input."""
         multi = cls(input.structure, input.pseudos, ndtset=ndtset)
 
         for inp in multi:
@@ -1894,7 +1951,7 @@ class MultiDataset(object):
     def __init__(self, structure, pseudos, pseudo_dir="", ndtset=1):
         """
         Args:
-            structure: file with the structure, :class:`Structure` object or dictionary with ABINIT geo variable
+            structure: file with the structure, |Structure| object or dictionary with ABINIT geo variable
                 Accepts also list of objects that can be converted to Structure object.
                 In this case, however, ndtset must be equal to the length of the list.
             pseudos: String or list of string with the name of the pseudopotential files.
@@ -2015,14 +2072,14 @@ class MultiDataset(object):
             return NotImplementedError("Operation not supported")
 
     def append(self, abinit_input):
-        """Add a :class:`AbinitInput` to the list."""
+        """Add a |AbinitInput| to the list."""
         assert isinstance(abinit_input, AbinitInput)
         if any(p1 != p2 for p1, p2 in zip(abinit_input.pseudos, abinit_input.pseudos)):
             raise ValueError("Pseudos must be consistent when from_inputs is invoked.")
         self._inputs.append(abinit_input)
 
     def extend(self, abinit_inputs):
-        """Extends self with a list of :class:`AbinitInput` objects."""
+        """Extends self with a list of |AbinitInput| objects."""
         assert all(isinstance(inp, AbinitInput) for inp in abinit_inputs)
         for inp in abinit_inputs:
             if any(p1 != p2 for p1, p2 in zip(self[0].pseudos, inp.pseudos)):
@@ -2030,15 +2087,15 @@ class MultiDataset(object):
         self._inputs.extend(abinit_inputs)
 
     def addnew_from(self, dtindex):
-        """Add a new entry in the multidataset by copying the input with index `dtindex`."""
+        """Add a new entry in the multidataset by copying the input with index ``dtindex``."""
         self.append(self[dtindex].deepcopy())
 
     def split_datasets(self):
-        """Return list of AbinitInput files."""
+        """Return list of |AbinitInput| objects.."""
         return self._inputs
 
     def deepcopy(self):
-        """Deep copy of the object."""
+        """Deep copy of the MultiDataset."""
         return copy.deepcopy(self)
 
     @property
@@ -2054,7 +2111,7 @@ class MultiDataset(object):
         String representation i.e. the input file read by Abinit.
 
         Args:
-            mode: Either `text` or `html` if HTML output with links is wanted.
+            mode: Either ``text`` or ``html`` if HTML output with links is wanted.
             with_pseudos: False if JSON section with pseudo data should not be added.
         """
         if mode == "html":
@@ -2124,7 +2181,7 @@ class MultiDataset(object):
             return self[0].to_string(mode=mode, with_pseudos=with_pseudos)
 
     def _repr_html_(self):
-        """Integration with jupyter notebooks."""
+        """Integration with jupyter_ notebooks."""
         return self.to_string(mode="html")
 
     def filter_by_tags(self, tags=None, exclude_tags=None):
@@ -2136,7 +2193,7 @@ class MultiDataset(object):
             exclude_tags: A single tag or list/tuple/set of tags that should be excluded
 
         Returns:
-            A :class:`MultiDataset` containing the inputs containing all the requested tags
+            A |MultiDataset| containing the inputs containing all the requested tags.
         """
         if isinstance(tags, (list, tuple, set)):
             tags = set(tags)
@@ -2182,7 +2239,7 @@ class MultiDataset(object):
 
     def filter_by_runlevel(self, runlevel):
         """
-        Return new MultiDataset object in which only the inputs with the given runlevel are selected
+        Return new |MultiDataset| object in which only the inputs with the given runlevel are selected.
         """
         if isinstance(runlevel, (list, tuple, set)):
             runlevel = set(runlevel)
@@ -2195,7 +2252,7 @@ class MultiDataset(object):
 
     def write(self, filepath="run.abi"):
         """
-        Write `ndset` input files to disk. The name of the file
+        Write ``ndset`` input files to disk. The name of the file
         is constructed from the dataset index e.g. run0.abi
         """
         root, ext = os.path.splitext(filepath)
@@ -2209,13 +2266,20 @@ class AnaddbInputError(Exception):
 
 
 class AnaddbInput(AbstractInput, Has_Structure):
+    """
+    This object stores the anaddb variables.
+
+
+    .. rubric:: Inheritance Diagram
+    .. inheritance-diagram:: AnaddbInput
+    """
 
     Error = AnaddbInputError
 
     def __init__(self, structure, comment="", anaddb_args=None, anaddb_kwargs=None):
         """
         Args:
-            structure: :class:`Structure` object
+            structure: |Structure| object
             comment: Optional string with a comment that will be placed at the beginning of the file.
             anaddb_args: List of tuples (key, value) with Anaddb input variables (default: empty)
             anaddb_kwargs: Dictionary with Anaddb input variables (default: empty)
@@ -2267,7 +2331,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         Input file for the calculation of the phonon frequencies at a given q-point.
 
         Args:
-            Structure: :class:`Structure` object
+            structure: |Structure| object
             qpoint: Reduced coordinates of the q-point where phonon frequencies and modes are wanted
             asr, chneut, dipdp, ifcflag: Anaddb input variable. See official documentation.
             lo_to_splitting: if True calculation of the LO-TO splitting will be included if qpoint==Gamma
@@ -2291,9 +2355,9 @@ class AnaddbInput(AbstractInput, Has_Structure):
 
         new.set_vars(
             ifcflag=ifcflag,        # Interatomic force constant flag
-            asr=asr,          # Acoustic Sum Rule
-            chneut=chneut,    # Charge neutrality requirement for effective charges.
-            dipdip=dipdip,    # Dipole-dipole interaction treatment
+            asr=asr,                # Acoustic Sum Rule
+            chneut=chneut,          # Charge neutrality requirement for effective charges.
+            dipdip=dipdip,          # Dipole-dipole interaction treatment
             # This part is fixed
             nph1l=1,
             qph1l=np.append(qpoint, 1)
@@ -2343,7 +2407,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         Build an anaddb input file for the computation of phonon bands and phonon DOS.
 
         Args:
-            structure: :class:`Structure` object
+            structure: |Structure| object
             ngqpt: Monkhorst-Pack divisions for the phonon Q-mesh (coarse one)
             nqsmall: Used to generate the (dense) mesh for the DOS.
                 It defines the number of q-points used to sample the smallest lattice vector.
@@ -2378,6 +2442,10 @@ class AnaddbInput(AbstractInput, Has_Structure):
         # Parameters for the dos.
         new.set_autoqmesh(nqsmall)
         new.set_vars(prtdos=prtdos, dosdeltae=dosdeltae, dossmear=dossmear)
+
+        # Disable DOS computation.
+        if nqsmall == 0:
+            new["prtdos"] = 0
 
         new.set_qpath(ndivsm, qptbounds=qptbounds)
         qptbounds = new['qpath']
@@ -2426,7 +2494,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         properties from PhDos
 
         Args:
-            structure: :class:`Structure` object
+            structure: |Structure| object
             ngqpt: Monkhorst-Pack divisions for the phonon Q-mesh (coarse one)
             nqsmall: Used to generate the (dense) mesh for the DOS.
                 It defines the number of q-points used to sample the smallest lattice vector.
@@ -2501,7 +2569,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         Build an anaddb input file for the computation of phonon modes.
 
         Args:
-            Structure: :class:`Structure` object
+            Structure: |Structure| object
             ngqpt: Monkhorst-Pack divisions for the phonon Q-mesh (coarse one)
             nqsmall: Used to generate the (dense) mesh for the DOS.
                 It defines the number of q-points used to sample the smallest lattice vector.
@@ -2556,7 +2624,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         Build an anaddb input file for the computation of interatomic force constants.
 
         Args:
-            structure: :class:`Structure` object
+            structure: |Structure| object
             ngqpt: Monkhorst-Pack divisions for the phonon Q-mesh (coarse one)
             ifcout: Number of neighbouring atoms for which the ifc's will be output. If None all the atoms in the big box.
             q1shft: Shifts used for the coarse Q-mesh
@@ -2593,6 +2661,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
 
     @property
     def structure(self):
+        """|Structure| object."""
         return self._structure
 
     def to_string(self, sortmode=None, mode="text", verbose=0):
@@ -2628,7 +2697,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
         return "\n".join(lines) if mode == "text" else "\n".join(lines).replace("\n", "<br>")
 
     def _repr_html_(self):
-        """Integration with jupyter notebooks."""
+        """Integration with jupyter_ notebooks."""
         return self.to_string(mode="html")
 
     def set_qpath(self, ndivsm, qptbounds=None):
@@ -2660,7 +2729,7 @@ class AnaddbInput(AbstractInput, Has_Structure):
 
         Args:
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
             `namedtuple` with the following attributes:
@@ -2900,7 +2969,7 @@ class OpticInput(AbstractInput, MSONable):
 
         Args:
             workdir: Working directory of the fake task used to compute the ibz. Use None for temporary dir.
-            manager: :class:`TaskManager` of the task. If None, the manager is initialized from the config file.
+            manager: |TaskManager| of the task. If None, the manager is initialized from the config file.
 
         Return:
             `namedtuple` with the following attributes:
@@ -3124,3 +3193,45 @@ class Cut3DInput(MSONable, object):
         """
         return cls(infile_path=d.get('infile_path', None), output_filepath=d.get('output_filepath', None),
                    options=d.get('options', None))
+
+
+def product_dict(d):
+    """
+    This function receives a dictionary d where each key defines a list of items or a simple scalar.
+    It constructs the Cartesian product of the values (equivalent to nested for-loops),
+    and returns a list of dictionaries with the values that would be used inside the loop.
+
+    >>> d = OrderedDict([("foo", [2, 4]), ("bar", 1)])
+    >>> product_dict(d) == [OrderedDict([('foo', 2), ('bar', 1)]), OrderedDict([('foo', 4), ('bar', 1)])]
+    True
+    >>> d = OrderedDict([("bar", [1,2]), ('foo', [3,4])])
+    >>> product_dict(d) == [{'bar': 1, 'foo': 3},
+    ... {'bar': 1, 'foo': 4},
+    ... {'bar': 2, 'foo': 3},
+    ... {'bar': 2, 'foo': 4}]
+    True
+
+    .. warning:
+
+        Dictionaries are not ordered, therefore one cannot assume that
+        the order of the keys in the output equals the one used to loop.
+        If the order is important, one should pass a :class:`OrderedDict` in input.
+    """
+    keys, vals = d.keys(), d.values()
+
+    # Each item in vals must be iterable.
+    values = []
+
+    for v in vals:
+        if not isinstance(v, collections.Iterable): v = [v]
+        values.append(v)
+
+    # Build list of dictionaries. Use ordered dicts so that
+    # we preserve the order when d is an OrderedDict.
+    vars_prod = []
+
+    for prod_values in itertools.product(*values):
+        dprod = OrderedDict(zip(keys, prod_values))
+        vars_prod.append(dprod)
+
+    return vars_prod

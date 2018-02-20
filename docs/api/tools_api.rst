@@ -1,6 +1,9 @@
 tools Package
 =============
 
+.. contents::
+   :backlinks: top
+
 
 :mod:`tools` Module
 -------------------
@@ -46,6 +49,14 @@ tools Package
 ------------------
 
 .. automodule:: abipy.tools.duck
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+:mod:`fftprof` Module
+---------------------
+
+.. automodule:: abipy.tools.fftprof
    :members:
    :undoc-members:
    :show-inheritance:

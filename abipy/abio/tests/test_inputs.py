@@ -6,7 +6,7 @@ import numpy as np
 import abipy.data as abidata
 
 from abipy import abilab
-from abipy.core.testing import AbipyTest, has_abinit
+from abipy.core.testing import AbipyTest
 from abipy.abio.inputs import *
 from abipy.abio.input_tags import *
 
@@ -121,6 +121,14 @@ class TestAbinitInput(AbipyTest):
         # Compatible with Pickle and MSONable?
         self.serialize_with_pickle(inp, test_eq=False)
         self.assertMSONable(inp)
+
+        # Test generate method.
+        ecut_list = [10, 20]
+        for i, ginp in enumerate(inp.generate(ecut=ecut_list)):
+            assert ginp["ecut"] == ecut_list[i]
+
+        inp_list = list(inp.generate(ecut=[10, 20], nsppol=[1, 2]))
+        assert len(inp_list) == 4
 
         # Test tags
         assert isinstance(inp.tags, set)
@@ -443,7 +451,7 @@ class TestAbinitInput(AbipyTest):
         #####################
         # Non-linear methods
         ####################
-        if has_abinit('8.3.2'):
+        if self.has_abinit(version='8.3.2'):
             dte_inputs = gs_inp.make_dte_inputs(phonon_pert=True, skip_permutations=True)
             print("dte inputs\n", dte_inputs)
             assert len(dte_inputs) == 8
@@ -729,6 +737,7 @@ class OpticInputTest(AbipyTest):
         )
 
         repr(optic_input); str(optic_input)
+        assert optic_input.to_string(verbose=2)
         # TODO
         #assert optic_input._repr_html_()
         assert optic_input.vars

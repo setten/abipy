@@ -1,9 +1,17 @@
 ipython
 jupyter
 nbformat
+pygments
+ipywidgets
 networkx
 scikit-image
+#graphviz or python-graphviz if conda
+phonopy
 #mayavi
 # Unit tests
 pytest
+pytest-cov
 pytest-xdist
+pytest-sugar
+scripttest
+python-coveralls

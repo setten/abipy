@@ -86,6 +86,12 @@ class TestKpoint(AbipyTest):
         X = Kpoint([0.5, 0, 0], lattice)
         K = Kpoint([1/3, 1/3, 1/3], lattice)
         repr(X); str(X)
+        assert X.to_string(verbose=2)
+
+        assert gamma.is_gamma()
+        assert not pgamma.is_gamma()
+        assert pgamma.is_gamma(allow_umklapp=True)
+        assert not X.is_gamma()
 
         # TODO
         #assert np.all(np.array(X) == X.frac_coords)
@@ -328,7 +334,10 @@ class KmeshTest(AbipyTest):
 
     def test_unshifted_kmesh(self):
         """Testing the generation of unshifted kmeshes."""
-        mpdivs, shifts = [1,2,3], [0,0,0]
+        def rm_spaces(s):
+            return " ".join(s.split()).replace("[ ", "[")
+
+        mpdivs, shifts = [1, 2, 3], [0, 0, 0]
 
         # No shift, no pbc.
         kmesh = kmesh_from_mpdivs(mpdivs, shifts, order="unit_cell")
@@ -340,7 +349,7 @@ class KmeshTest(AbipyTest):
  [ 0.          0.5         0.        ]
  [ 0.          0.5         0.33333333]
  [ 0.          0.5         0.66666667]]"""
-        self.assertMultiLineEqual(str(kmesh), ref_string)
+        self.assertMultiLineEqual(rm_spaces(str(kmesh)), rm_spaces(ref_string))
 
         # No shift, with pbc.
         pbc_kmesh = kmesh_from_mpdivs(mpdivs, shifts, pbc=True, order="unit_cell")
@@ -370,7 +379,7 @@ class KmeshTest(AbipyTest):
  [ 1.          1.          0.33333333]
  [ 1.          1.          0.66666667]
  [ 1.          1.          1.        ]]"""
-        self.assertMultiLineEqual(str(pbc_kmesh), ref_string)
+        self.assertMultiLineEqual(rm_spaces(str(pbc_kmesh)), rm_spaces(ref_string))
 
         # No shift, no pbc, bz order
         bz_kmesh = kmesh_from_mpdivs(mpdivs, shifts, pbc=False, order="bz")
@@ -382,7 +391,7 @@ class KmeshTest(AbipyTest):
  [ 0.          0.         -0.33333333]
  [ 0.          0.          0.        ]
  [ 0.          0.          0.33333333]]"""
-        self.assertMultiLineEqual(str(bz_kmesh), ref_string)
+        self.assertMultiLineEqual(rm_spaces(str(bz_kmesh)), rm_spaces(ref_string))
 
         # No shift, pbc, bz order
         bz_kmesh = kmesh_from_mpdivs(mpdivs, shifts, pbc=True, order="bz")
@@ -412,7 +421,7 @@ class KmeshTest(AbipyTest):
  [ 1.          0.5         0.        ]
  [ 1.          0.5         0.33333333]
  [ 1.          0.5         0.66666667]]"""
-        self.assertMultiLineEqual(str(bz_kmesh), ref_string)
+        self.assertMultiLineEqual(rm_spaces(str(bz_kmesh)), rm_spaces(ref_string))
 
 
 class TestKsamplingInfo(AbipyTest):

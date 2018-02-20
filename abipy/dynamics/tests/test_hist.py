@@ -14,6 +14,7 @@ class HistFileTest(AbipyTest):
         hist = HistFile(abidata.ref_file("sic_relax_HIST.nc"))
         repr(hist); str(hist)
         hist.to_string(verbose=2)
+        assert not hist.params
 
         an = hist.get_relaxation_analyzer()
         assert hist.num_steps == 7
@@ -34,6 +35,8 @@ class HistFileTest(AbipyTest):
         #self.assert_almost_equal(cart_forces_step[0], [
         #    6.42133418983323e-32, -1.92640025694997e-31, 6.42133418983323e-32,
         #   -6.42133418983323e-32, 1.92640025694997e-31, -6.42133418983323e-32])
+        fred = hist.reader.read_reduced_forces()
+        assert fred.shape == cart_forces_step.shape
 
         # Cartesian components of stress tensor (hartree/bohr^3)
         #  sigma(1 1)=  5.01170783E-08  sigma(3 2)=  0.00000000E+00
@@ -53,6 +56,16 @@ class HistFileTest(AbipyTest):
 
         same_structure = abilab.Structure.from_file(abidata.ref_file("sic_relax_HIST.nc"))
         self.assert_almost_equal(same_structure.frac_coords, hist.final_structure.frac_coords)
+
+        # Test to_xdatcar converter
+        xdatcar = hist.to_xdatcar(filepath=None, groupby_type=True)
+        assert xdatcar.natoms == [1, 1] and len(xdatcar.structures) == hist.num_steps
+        self.assert_almost_equal(xdatcar.structures[0].volume, hist.structures[0].volume)
+        self.assert_almost_equal(xdatcar.structures[-1].frac_coords, hist.structures[-1].frac_coords)
+
+        xdatcar_nogroup = hist.to_xdatcar(filepath=None, groupby_type=False)
+        assert xdatcar.structures[0] ==  xdatcar_nogroup.structures[0]
+        assert xdatcar.structures[-1] ==  xdatcar_nogroup.structures[-1]
 
         # Test matplotlib plots.
         if self.has_matplotlib():
@@ -81,7 +94,14 @@ class HistFileTest(AbipyTest):
             assert len(robot.get_structure_dataframes()) == 3
 
             df = robot.get_dataframe()
-            assert "angle1" in df
+            assert "alpha" in df
+
+            if self.has_matplotlib():
+                what_list = ["energy", "abc", "pressure", "forces"]
+                assert robot.gridplot(what=what_list, fontsize=4, show=False)
+                assert robot.combiplot(colormap="viridis", show=False)
+                assert robot.plot_lattice_convergence(fontsize=10, show=False)
+                assert robot.plot_lattice_convergence(what_list=("a", "alpha"), show=False)
 
             if self.has_nbformat():
                 robot.write_notebook(nbpath=self.get_tmpname(text=True))

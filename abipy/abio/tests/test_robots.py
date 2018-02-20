@@ -15,7 +15,6 @@ class RobotTest(AbipyTest):
 
     def test_base_robot_class(self):
         """Testing base robot class"""
-
         # This is for the abstract interface.
         class MyRobot(Robot):
             EXT = "FOOBAR.nc"
@@ -28,6 +27,7 @@ class RobotTest(AbipyTest):
             assert robot.to_string(verbose=2)
             assert robot._repr_html_()
             assert len(robot) == 0 and not robot.exceptions
+            robot.show_files()
 
         assert Robot.class_for_ext("DDB") is abilab.DdbRobot
         assert Robot.class_for_ext("OPTIC") is abilab.OpticRobot

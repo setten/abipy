@@ -1,76 +1,47 @@
 language: python
+#cache: true
 
 # We don't actually use the Travis Python but conda
 matrix:
   include:
     - os: linux
       python: 2.7
-      env: PYTHON_VERSION=2.7
+      env: ABINIT_VERSION=8.6.1
     - os: linux
       python: 3.6
-      env: PYTHON_VERSION=3.6
-#    - os: osx
-#      python: 2.7
-#      language: generic
-#      env: PYTHON_VERSION=2.7
+      env: ABINIT_VERSION=8.6.1
 
 #dist: precise
 sudo: false
 install:
   #- sudo apt-get update
   - env
+  #- set -ev  # exit on first error, print each command
 
   # pip-based installation.
-  #- pip install numpy
-  #- travis_wait pip install -q -r requirements.txt
-  #- travis_wait pip install -q -r requirements-optional.txt
+  #- travis_wait pip install -r requirements.txt
+  #- travis_wait pip install -r requirements-optional.txt
 
   # Install conda https://conda.io/docs/travis.html
-  - source dev_scripts/conda_installer.sh
-  - conda config --add channels conda-forge
+  - source dev_scripts/conda_get.sh
+  - source dev_scripts/conda_install.sh
+  - conda uninstall -y pymatgen
 
-  # See https://github.com/BVLC/caffe/issues/3884 and https://docs.continuum.io/mkl-optimizations/
-  - conda install nomkl
-  #- conda install gcc 
-  #- conda install libgcc
-  #- conda install scipy sympy
-  - conda install pandas
-  - conda install netcdf4 
-  # See https://github.com/ContinuumIO/anaconda-issues/issues/1360
-  #- conda install hdf4=4.2.12
-  - pip install pytest scripttest nose nose-exclude
-  - if [[ "${PYTHON_VERSION}" == "2.7" ]]; then conda install mock; fi
-  - pip install pep8 python-coveralls
-  #- conda install matplotlib seaborn
-  - pip install matplotlib seaborn
-  - pip install scikit-image
-  #- conda install ipython jupyter nbformat
-  - pip install ipython jupyter nbformat
-  #- conda install -c conda-forge ipywidgets
-  - pip install ipywidgets
-
-  # Install abinit from abinit conda channel.
-  #- conda install -c abinit abinit=8.2.2
-  - conda install -c gmatteo abinit=8.6.1
-  - abinit --version
-  - abinit --build
+  - if [[ "${TRAVIS_PYTHON_VERSION}" == "2.7" ]]; then conda install mock; fi
+  - pip install nose nose-exclude
+  #- pip install graphviz
 
   # Mayavi (optional requirement)
-  #- if [[ "${PYTHON_VERSION}" == "2.7" ]]; then conda install mayavi; fi
-  #- if [[ "${PYTHON_VERSION}" == "3.6" ]]; then conda install vtk && pip install mayavi; fi
+  #- if [[ "${TRAVIS_PYTHON_VERSION}" == "2.7" ]]; then conda install mayavi; fi
+  #- if [[ "${TRAVIS_PYTHON_VERSION}" == "3.6" ]]; then conda install vtk && pip install mayavi; fi
 
-  # Get pymatgen from matsci
-  #- conda config --add channels matsci
-  #- conda install pymatgen
+  # Use gmatteo's pymatgen fork
+  #- git clone --depth=50 https://github.com/gmatteo/pymatgen.git && cd pymatgen && pip install -r requirements.txt && pip install -r requirements-optional.txt && python setup.py install && cd ../
 
-  # Use my pymatgen fork
-  - git clone --depth=50 https://github.com/gmatteo/pymatgen.git && cd pymatgen && pip install -q -r requirements.txt && pip install -q -r requirements-optional.txt && python setup.py install && cd ../
+  - git clone --depth=50 https://github.com/gmatteo/pymatgen.git && cd pymatgen && python setup.py install && cd ../
 
   # Use pymatgen master
-  #- git clone --depth=50 https://github.com/materialsproject/pymatgen.git && cd pymatgen && pip install -q -r requirements.txt && pip install -q -r requirements-optional.txt && python setup.py install && cd ../
-
-  # phonopy is not a requirement but we test scripts in data/runs that use it
-  - conda install -c conda-forge phonopy
+  #- git clone --depth=50 https://github.com/materialsproject/pymatgen.git && cd pymatgen && pip install -r requirements.txt && pip install -r requirements-optional.txt && python setup.py install && cd ../
 
   - python setup.py install
   - mkdir -p ${HOME}/.abinit/abipy 
@@ -97,7 +68,7 @@ branches:
     - develop
 
 after_success:
-- if [[ "${PYTHON_VERSION}" == "2.7" && "${TRAVIS_OS_NAME}" == "linux" ]]; then coveralls; fi
+  - if [[ "${TRAVIS_PYTHON_VERSION}" == "3.6" && "${TRAVIS_OS_NAME}" == "linux" ]]; then coveralls; fi
 
 notifications:
   email:
@@ -105,3 +76,12 @@ notifications:
       - gmatteo@gmail.com
     on_success: change
     on_failure: always
+
+# https://docs.travis-ci.com/user/deployment/pages/
+#deploy:
+#  provider: pages
+#  skip_cleanup: true
+#  github_token: $GITHUB_TOKEN # Set in travis-ci.org dashboard
+#  local_dir: ${TRAVIS_BUILD_DIR}/yourfolder
+#  on:
+#    branch: master

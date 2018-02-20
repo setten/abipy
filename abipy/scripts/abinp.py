@@ -23,8 +23,8 @@ def get_structure(options):
         return abilab.Structure.from_file(options.filepath)
 
     elif options.filepath.startswith("mp-"):
-        return abilab.Structure.from_material_id(options.filepath, final=True,
-                                                 api_key=options.mapi_key, endpoint=options.endpoint)
+        return abilab.Structure.from_mpid(options.filepath, final=True,
+                                          api_key=options.mapi_key, endpoint=options.endpoint)
 
     raise TypeError("Don't know how to extract structure object from %s" % options.filepath)
 
@@ -62,17 +62,25 @@ def finalize(obj, options):
     return 0
 
 
-def build_abinit_input_from_file(options):
-    """Build and return an AbinitInput instance from filepath."""
+def build_abinit_input_from_file(options, **abivars):
+    """
+    Build and return an AbinitInput instance from filepath.
+
+    abivars are optional variables that will be added to the input.
+    """
     from abipy.abio.abivars import AbinitInputFile
     abifile = AbinitInputFile(options.filepath)
     pseudos = get_pseudotable(options)
     jdtset = options.jdtset
+    # Get vars from input
     abi_kwargs = abifile.datasets[jdtset - 1].get_vars()
     if abifile.ndtset != 1:
         cprint("# Input file contains %s datasets, will select jdtset index %s:" %
                (abifile.ndtset, jdtset), "yellow")
         abi_kwargs["jdtset"] = jdtset
+
+    # Add input abivars (if any).
+    abi_kwargs.update(abivars)
 
     return abilab.AbinitInput(abifile.structure, pseudos, pseudo_dir=None, comment=None, decorators=None, abi_args=None,
                               abi_kwargs=abi_kwargs, tags=None)
@@ -99,8 +107,8 @@ def abinp_autoparal(options):
 
 
 def abinp_abispg(options):
-    """Call Abinit to find space group."""
-    inp = build_abinit_input_from_file(options)
+    """Call Abinit with chkprim = 0 to find space group."""
+    inp = build_abinit_input_from_file(options, chkprim=0, mem_test=0)
     r = inp.abivalidate()
     if r.retcode != 0:
         print(r.log_file, r.stderr_file)
@@ -150,6 +158,7 @@ def abinp_phperts(options):
     qpt = None if "qpt" in inp else [0, 0, 0]
     perts = inp.abiget_irred_phperts(qpt=qpt)
     print(perts)
+
     return 0
 
 
@@ -161,7 +170,7 @@ def abinp_gs(options):
                                kppa=None, ecut=None, pawecutdg=None, scf_nband=None,
                                accuracy="normal", spin_mode="unpolarized",
                                smearing="fermi_dirac:0.1 eV", charge=0.0, scf_algorithm=None)
-    #print(gsinp._repr_html_())
+
     return finalize(gsinp, options)
 
 
@@ -232,6 +241,7 @@ def abinp_anaph(options):
 
     return finalize(inp, options)
 
+
 def get_epilog():
     return r"""
 Usage example:
@@ -240,8 +250,8 @@ Usage example:
 # Require Abinit Input
 ######################
 
-    abinp.py validate run.abi       # Call abinit in dry-run mode to validate run.abi input file
-    abinp.py abispg run.abi         # Call abinit to get space group.
+    abinp.py validate run.abi       # Call abinit to validate run.abi input file
+    abinp.py abispg run.abi         # Call abinit to get space group information.
     abinp.py autoparal run.abi      # Call abinit to get list of autoparal configurations.
     abinp.py ibz run.abi            # Call abinit to get list of k-points in the IBZ.
     abinp.py phperts run.abi        # Call abinit to get list of atomic perturbations for phonons.

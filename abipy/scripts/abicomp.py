@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Script to analyze/compare results stored in multiple netcdf files.
+Script to analyze/compare results stored in multiple netcdf/output files.
 By default the script displays the results/plots in the shell.
 Use --ipython to start an ipython terminal or -nb to generate an ipython notebook.
 """
@@ -15,6 +15,42 @@ from pprint import pprint
 from monty.functools import prof_main
 from monty.termcolor import cprint
 from abipy import abilab
+
+
+# Not used but could be useful to analyze densities.
+def sort_paths(options):
+    """
+    Sort input files whose name is in the form `out_TIM2_DEN`
+    Files are sorted by TIM index.
+    """
+    if options.no_sort: return
+    names = [os.path.basename(p) for p in options.filepath]
+    import re
+    # out_TIM2_DEN
+    tim = re.compile(r".+_TIM(\d+)_.+")
+    l = []
+    for p, n in zip(options.filepath, names):
+        m = tim.match(n)
+        if m:
+            l.append((int(m.group(1)), p))
+    if not l: return
+    if len(l) != len(options.filepath):
+        print("Cannot sort input path!")
+        return
+
+    options.paths = [t[1] for t in sorted(l, key=lambda t: t[0])]
+    print("Input files have been automatically sorted")
+    for i, p in enumerate(options.paths):
+        print("%d: %s" % (i, p))
+    print("Use --no-sort to disable automatic sorting.")
+
+
+def abiview_fields(options):
+    """Animate fields with Mayavi. Accept any file with density or potential ..."""
+    from abipy.display.mvtk import MayaviFieldAnimator
+    a = MayaviFieldAnimator(options.filepath)
+    a.volume_animate()
+    return 0
 
 
 def abicomp_structure(options):
@@ -135,6 +171,11 @@ def _compare_with_database(options):
     else:
         raise NotImplementedError(str(options.command))
 
+    # Filter by spglib space group number.
+    if getattr(options, "same_spgnum", False):
+        spgnums = [struct.get_space_group_info()[1] for struct in structures]
+        mpres = [r.filter_by_spgnum(spgnum) for spgnum, r in zip(spgnums, mpres)]
+
     retcode = 0
     for this_structure, r in zip(structures, mpres):
         if r.structures:
@@ -147,6 +188,8 @@ def _compare_with_database(options):
                 abilab.print_dataframe(dfs.lattice, title="Lattice parameters:", sortby="spglib_num")
                 if options.verbose:
                     abilab.print_dataframe(dfs.coords, title="Atomic positions (columns give the site index):")
+                else:
+                    print("Use --verbose to print atomic positions.")
                 print()
 
         else:
@@ -319,17 +362,17 @@ def abicomp_phdos(options):
     return 0
 
 
-def abicomp_attr(options):
+def abicomp_getattr(options):
     """
     Extract attribute from Abipy object for all files listed on the command line and print them.
-    Use `--show` option to list the attributes available (in the first file).
+    Use `--list` option to list the attributes available (in the first file).
     """
     files = []
     attr_name = options.paths[0]
     values = []
     for p in options.paths[1:]:
         with abilab.abiopen(p) as abifile:
-            if options.show:
+            if options.list:
                 print("List of attributes available in %s" % p)
                 pprint(dir(abifile))
                 return 0
@@ -369,6 +412,7 @@ def abicomp_gsr(options):
     """
     return _invoke_robot(options)
 
+
 def abicomp_hist(options):
     """
     Compare multiple HIST files.
@@ -380,6 +424,13 @@ def abicomp_ddb(options):
     """
     Compare multiple DDB files. Assume DDB files with a list of q-points in the IBZ
     corresponding to homogeneous sampling i.e. files that have been merged with mrgddb.
+    """
+    return _invoke_robot(options)
+
+
+def abicomp_phbst(options):
+    """
+    Compare multiple PHBST.nc files.
     """
     return _invoke_robot(options)
 
@@ -472,8 +523,9 @@ def _invoke_robot(options):
     robot_cls = abilab.Robot.class_for_ext(options.command.upper())
 
     # To define an Help action
-    #http://stackoverflow.com/questions/20094215/argparse-subparser-monolithic-help-output?rq=1
+    # http://stackoverflow.com/questions/20094215/argparse-subparser-monolithic-help-output?rq=1
     paths = options.paths
+    #print(paths)
 
     if os.path.isdir(paths[0]):
         # Assume directory.
@@ -496,18 +548,40 @@ def _invoke_robot(options):
         cprint("Warning: robot is empty. No file found", "red")
         return 1
 
-    if options.ipython:
-        import IPython
-        IPython.embed(header=repr(robot) + "\n\nType `robot` in the terminal and use <TAB> to list its methods",
-                      robot=robot)
-
-    elif options.notebook:
+    if options.notebook:
         robot.make_and_open_notebook(foreground=options.foreground)
 
-    else:
-        print(robot.to_string(verbose=options.verbose))
+    elif options.print or options.expose:
+        robot.trim_paths()
+        #df = robot.get_params_dataframe()
+        #abilab.print_dataframe(df, title="Output of robot.get_params_dataframe():")
+
+        # Print dataframe if robot provides get_dataframe method.
+        if hasattr(robot, "get_dataframe"):
+            try:
+                df = robot.get_dataframe()
+                abilab.print_dataframe(df, title="Output of robot.get_dataframe():")
+            except Exception as exc:
+                cprint("Exception:\n%s\n\nwhile invoking get_dataframe. Falling back to to_string" % str(exc), "red")
+                print(robot.to_string(verbose=options.verbose))
+
+        else:
+            cprint("%s does not provide `get_dataframe` method. Using `to_string`" % (
+                    robot.__class__.__name__), "yellow")
+            print(robot.to_string(verbose=options.verbose))
+
         if not options.verbose:
             print("\nUse --verbose for more information")
+
+        if options.expose:
+            robot.expose(slide_mode=options.slide_mode, slide_timeout=options.slide_timeout)
+
+    #elif options.ipython:
+    else:
+        import IPython
+        robot.trim_paths()
+        IPython.embed(header=repr(robot) + "\n\nType `robot` in the terminal and use <TAB> to list its methods",
+                      robot=robot)
 
     return 0
 
@@ -549,11 +623,12 @@ def abicomp_time(options):
     Analyze/plot the timing data of single or multiple runs.
     """
     paths = options.paths
+    from abipy.abio.timer import AbinitTimerParser
 
     if len(options.paths) == 1 and os.path.isdir(paths[0]):
         top = options.paths[0]
         print("Walking directory tree from top:", top, "Looking for file extension:", options.ext)
-        parser, paths_found, okfiles = abilab.AbinitTimerParser.walk(top=top, ext=options.ext)
+        parser, paths_found, okfiles = AbinitTimerParser.walk(top=top, ext=options.ext)
 
         if not paths_found:
             cprint("Empty file list!", color="magenta")
@@ -566,7 +641,7 @@ def abicomp_time(options):
             for bad in badfiles: print(bad)
 
     else:
-        parser = abilab.AbinitTimerParser()
+        parser = AbinitTimerParser()
         okfiles = parser.parse(options.paths)
 
         if okfiles != options.paths:
@@ -596,7 +671,6 @@ def abicomp_time(options):
     return 0
 
 
-
 def get_epilog():
     return """\
 Usage example:
@@ -605,72 +679,97 @@ Usage example:
 # Structures
 ############
 
-  abicomp.py structure */*/outdata/out_GSR.nc     => Compare structures in multiple files.
-                                                     Use `--group` to compare for similarity
-  abicomp.py hist FILE(s)                         => Compare final structures read from HIST.nc files.
-  abicomp.py mp_structure FILE(s)                 => Compare structure(s) read from FILE(s) with the one(s)
-                                                     given in the materials project database.
-  abicomp.py cod_structure FILE(s)                => Compare structure(s) read from FILE(s) with the one(s)
-                                                     given in the COD database (http://www.crystallography.net/cod).
-  abicomp.py xrd *.cif *.GSR.nc                   => Compare X-ray diffraction plots (requires FILES with structure).
+  abicomp.py structure */*/outdata/out_GSR.nc   => Compare structures in multiple files.
+                                                   Use `--group` to compare for similarity
+  abicomp.py hist FILE(s)                       => Compare final structures read from HIST.nc files.
+  abicomp.py mp_structure FILE(s)               => Compare structure(s) read from FILE(s) with the one(s)
+                                                   given in the materials project database.
+  abicomp.py cod_structure FILE(s)              => Compare structure(s) read from FILE(s) with the one(s)
+                                                   given in the COD database (http://www.crystallography.net/cod).
+  abicomp.py xrd *.cif *.GSR.nc                 => Compare X-ray diffraction plots (requires FILES with structure).
 
 ###########
 # Electrons
 ###########
 
-  abicomp.py ebands out1_GSR.nc out2_WFK.nc       => Plot electron bands on a grid (Use `-p` to change plot mode)
-  abicomp.py ebands *_GSR.nc -ipy                 => Build plotter object and start ipython console.
-  abicomp.py ebands *_GSR.nc -nb                  => Interact with the plotter in the jupyter notebook.
-  abicomp.py edos *_WFK.nc -nb                    => Compare electron DOS in the jupyter notebook.
-  abicomp.py optic DIR                            => Compare optic results in the jupyter notebook.
+  abicomp.py ebands out1_GSR.nc out2_WFK.nc     => Plot electron bands on a grid (Use `-p` to change plot mode)
+  abicomp.py ebands *_GSR.nc -ipy               => Build plotter object and start ipython console.
+  abicomp.py ebands *_GSR.nc -nb                => Interact with the plotter in the jupyter notebook.
+  abicomp.py edos *_WFK.nc -nb                  => Compare electron DOS in the jupyter notebook.
+  abicomp.py optic DIR -nb                      => Compare optic results in the jupyter notebook.
 
 #########
 # Phonons
 #########
 
-  abicomp.py phbands *_PHBST.nc -nb               => Compare phonon bands in the jupyter notebook.
-  abicomp.py phdos *_PHDOS.nc -nb                 => Compare phonon DOSes in the jupyter notebook.
-  abicomp.py ddb outdir1 outdir2 out_DDB -nb      => Analyze all DDB files in directories outdir1, outdir2 and out_DDB file.
+  abicomp.py phbands *_PHBST.nc -nb             => Compare phonon bands in the jupyter notebook.
+  abicomp.py phbst *_PHBST.nc -ipy              => Compare phonon bands with robot in ipython terminal.
+  abicomp.py phdos *_PHDOS.nc -nb               => Compare phonon DOSes in the jupyter notebook.
+  abicomp.py ddb outdir1 outdir2 out_DDB -nb    => Analyze all DDB files in directories outdir1, outdir2 and out_DDB file.
 
 #########
 # E-PH
 #########
 
-  abicomp.py eph *_EPH.nc -nb                  => Compare EPH results in the jupyter notebook.
-  abicomp.py sigeph *_SIGEPH.nc -nb            => Compare Fan-Migdal self-energy in the jupyter notebook.
+  abicomp.py eph *_EPH.nc -nb                   => Compare EPH results in the jupyter notebook.
+  abicomp.py sigeph *_SIGEPH.nc -nb             => Compare Fan-Migdal self-energy in the jupyter notebook.
 
 ########
 # GW/BSE
 ########
 
-  abicomp.py sigres *_SIGRES.nc                   => Compare multiple SIGRES files.
-  abicomp.py mdf *_MDF.nc --seaborn               => Compare macroscopic dielectric functions. Use seaborn settings.
+  abicomp.py sigres *_SIGRES.nc                 => Compare multiple SIGRES files.
+  abicomp.py mdf *_MDF.nc --seaborn             => Compare macroscopic dielectric functions.
+                                                   Use seaborn settings.
 
 ###############
 # Miscelleanous
 ###############
 
-  abicomp.py attr energy *_GSR.nc                 => Extract the `energy` attribute from a list of GSR files
-                                                     and print results. Use `--show` to get list of possible names.
+  abicomp.py getattr energy *_GSR.nc              => Extract the `energy` attribute from a list of GSR files
+                                                     and print results. Use `--list` to get list of possible names.
   abicomp.py pseudos PSEUDO_FILES                 => Compare pseudopotential files.
 
 ############
 # Text files
 ############
 
-  abicomp.py text run1.abo run2.abo               => Compare 2+ output files in the browser.
   abicomp.py gs_scf run1.abo run2.abo             => Compare the SCF cycles in two output files.
   abicomp.py dfpt2_scf run1.abo run2.abo          => Compare the DFPT SCF cycles in two output files.
   abicomp.py.py time [OUT_FILES]                  => Parse timing data in files and plot results
   abicomp.py.py time . --ext=abo                  => Scan directory tree from `.`, look for files with extension `abo`
                                                      parse timing data and plot results.
+  abicomp.py text run1.abo run2.abo               => Produce diff of 2+ text files in the browser.
 
-TIP: Use Unix find to select all files with the a given extension and pass them to abicomp.py:
-For instance:
+TIP:
+
+The python code operates on a list of files/directories passed via the command line interface.
+The arguments are interpreted by the shell before invoking the script.
+This means that one can use the bash syntax and the unix tools to precompute the list of files/directories.
+
+For example, one can use Unix find to select all files with the a given extension and pass them to abicomp.py.
+For command:
 
     abicomp.py structure `find . -name "*_GSR.nc"`
 
-will compare the structurs extracted from all GSR.nc files found within the current working directory (note backticks).
+will compare the structures extracted from all GSR.nc files found within the current working directory (note backticks).
+
+Also, remember that in bash {#..#} generates a sequence of numbers or chars, similarly to range() in Python
+For instance:
+
+    {1..5} --> 1 2 3 4 5
+
+and this trick can be used to select files/directories as in:
+
+    abicomp.py structure w1/t{2..4}/outdata/*_GSR.nc
+
+The [!name] syntax can be used to exclude patterns, so
+
+    abicomp.py structure w1/t[!2]*/outdata/*_GSR.nc
+
+excludes all the GSR.nc files in the t2/outdata directory.
+
+See also http://wiki.bash-hackers.org/syntax/pattern
 
 NOTE: The `gsr`, `ddb`, `sigres`, `mdf` commands use robots to analyze files.
 In this case, one can provide a list of files and/or list of directories on the command-line interface e.g.:
@@ -692,23 +791,27 @@ def get_parser(with_epilog=False):
     copts_parser = argparse.ArgumentParser(add_help=False)
     copts_parser.add_argument('paths', nargs="+", help="List of files to compare.")
     copts_parser.add_argument('-v', '--verbose', default=0, action='count', # -vv --> verbose=2
-                              help='Verbose, can be supplied multiple times to increase verbosity.')
-    copts_parser.add_argument('--seaborn', action="store_true", help="Use seaborn settings.")
+        help='Verbose, can be supplied multiple times to increase verbosity.')
+    copts_parser.add_argument('--seaborn', action="store_true", help="Use seaborn settings for plots.")
+    copts_parser.add_argument('-mpl', "--mpl-backend", default=None,
+        help=("Set matplotlib interactive backend. "
+              "Possible values: GTKAgg, GTK3Agg, GTK, GTKCairo, GTK3Cairo, WXAgg, WX, TkAgg, Qt4Agg, Qt5Agg, macosx."
+              "See also: https://matplotlib.org/faq/usage_faq.html#what-is-a-backend."))
     copts_parser.add_argument('--loglevel', default="ERROR", type=str,
-                              help="Set the loglevel. Possible values: CRITICAL, ERROR (default), WARNING, INFO, DEBUG.")
+        help="Set the loglevel. Possible values: CRITICAL, ERROR (default), WARNING, INFO, DEBUG.")
 
     # Parent parser for commands supporting (ipython/jupyter)
     ipy_parser = argparse.ArgumentParser(add_help=False)
     ipy_parser.add_argument('-nb', '--notebook', default=False, action="store_true", help='Generate jupyter notebook.')
     ipy_parser.add_argument('--foreground', action='store_true', default=False,
-                            help="Run jupyter notebook in the foreground.")
+        help="Run jupyter notebook in the foreground.")
     ipy_parser.add_argument('-ipy', '--ipython', default=False, action="store_true", help='Invoke ipython terminal.')
 
     # Parent parser for commands supporting (jupyter notebooks)
     nb_parser = argparse.ArgumentParser(add_help=False)
     nb_parser.add_argument('-nb', '--notebook', default=False, action="store_true", help='Generate jupyter notebook.')
     nb_parser.add_argument('--foreground', action='store_true', default=False,
-                            help="Run jupyter notebook in the foreground.")
+        help="Run jupyter notebook in the foreground.")
 
     # Parent parser for *robot* commands
     robot_parser = argparse.ArgumentParser(add_help=False)
@@ -725,17 +828,21 @@ def get_parser(with_epilog=False):
     # Subparser for structure command.
     p_struct = subparsers.add_parser('structure', parents=[copts_parser, ipy_parser], help=abicomp_structure.__doc__)
     p_struct.add_argument("-g", "--group", default=False, action="store_true",
-                          help="Compare a set of structures for similarity.")
+        help="Compare a set of structures for similarity.")
     p_struct.add_argument("-a", "--anonymous", default=False, action="store_true",
-                          help="Whether to use anonymous mode in StructureMatcher. Default False")
+        help="Whether to use anonymous mode in StructureMatcher. Default False")
 
     # Subparser for mp_structure command.
     p_mpstruct = subparsers.add_parser('mp_structure', parents=[copts_parser, nb_parser],
-                                       help=abicomp_mp_structure.__doc__)
+        help=abicomp_mp_structure.__doc__)
+    p_mpstruct.add_argument("--same-spgnum", default=False, action="store_true",
+        help="Select only MP structures with same space group number as input structure.")
 
     # Subparser for cod_structure command.
     p_codstruct = subparsers.add_parser('cod_structure', parents=[copts_parser, nb_parser],
-                                        help=abicomp_cod_structure.__doc__)
+        help=abicomp_cod_structure.__doc__)
+    #p_codstruct.add_argument("--same-spgnum", default=False, action="store_true",
+    #    help="Select only COD structures with same space group number as input structure.")
 
     # Subparser for xrd.
     p_xrd = subparsers.add_parser('xrd', parents=[copts_parser], help="Compare X-ray diffraction plots.")
@@ -749,47 +856,62 @@ def get_parser(with_epilog=False):
     p_xrd.add_argument("-t", "--two-theta-range", default=(0, 90), nargs=2, help=(
         "Tuple for range of two_thetas to calculate in degrees. Defaults to (0, 90)."))
     p_xrd.add_argument("-nap", "--no-annotate-peaks", default=False, action="store_true",
-                       help="Whether to annotate the peaks with plane information.")
+        help="Whether to annotate the peaks with plane information.")
 
     # Subparser for ebands command.
     p_ebands = subparsers.add_parser('ebands', parents=[copts_parser, ipy_parser], help=abicomp_ebands.__doc__)
     p_ebands.add_argument("-p", "--plot-mode", default="gridplot",
-                          choices=["gridplot", "combiplot", "boxplot", "combiboxplot", "animate", "None"],
-                          help="Plot mode e.g. `-p combiplot` to plot bands on the same figure. Default is `gridplot`.")
+        choices=["gridplot", "combiplot", "boxplot", "combiboxplot", "animate", "None"],
+        help="Plot mode e.g. `-p combiplot` to plot bands on the same figure. Default is `gridplot`.")
     p_ebands.add_argument("-e0", default="fermie", choices=["fermie", "None"],
-                          help="Option used to define the zero of energy in the band structure plot. Default is `fermie`.")
+        help="Option used to define the zero of energy in the band structure plot. Default is `fermie`.")
 
     # Subparser for edos command.
     p_edos = subparsers.add_parser('edos', parents=[copts_parser, ipy_parser], help=abicomp_edos.__doc__)
     p_edos.add_argument("-p", "--plot-mode", default="gridplot",
-                        choices=["gridplot", "combiplot", "None"],
-                        help="Plot mode e.g. `-p combiplot` to plot DOSes on the same figure. Default is `gridplot`.")
+        choices=["gridplot", "combiplot", "None"],
+        help="Plot mode e.g. `-p combiplot` to plot DOSes on the same figure. Default is `gridplot`.")
     p_edos.add_argument("-e0", default="fermie", choices=["fermie", "None"],
-                        help="Option used to define the zero of energy in the DOS plot. Default is `fermie`.")
+        help="Option used to define the zero of energy in the DOS plot. Default is `fermie`.")
 
     # Subparser for phbands command.
     p_phbands = subparsers.add_parser('phbands', parents=[copts_parser, ipy_parser], help=abicomp_phbands.__doc__)
     p_phbands.add_argument("-p", "--plot-mode", default="gridplot",
-                           choices=["gridplot", "combiplot", "boxplot", "combiboxplot", "animate", "None"],
-                           help="Plot mode e.g. `-p combiplot` to plot bands on the same figure. Default is `gridplot`.")
+        choices=["gridplot", "combiplot", "boxplot", "combiboxplot", "animate", "None"],
+        help="Plot mode e.g. `-p combiplot` to plot bands on the same figure. Default is `gridplot`.")
 
     # Subparser for phdos command.
     p_phdos = subparsers.add_parser('phdos', parents=[copts_parser, ipy_parser], help=abicomp_phdos.__doc__)
     p_phdos.add_argument("-p", "--plot-mode", default="gridplot",
-                         choices=["gridplot", "combiplot", "None"],
-                         help="Plot mode e.g. `-p combiplot` to plot DOSes on the same figure. Default is `gridplot`.")
+        choices=["gridplot", "combiplot", "None"],
+        help="Plot mode e.g. `-p combiplot` to plot DOSes on the same figure. Default is `gridplot`.")
 
     # Subparser for phdos command.
-    p_attr = subparsers.add_parser('attr', parents=[copts_parser], help=abicomp_attr.__doc__)
-    #p_attr.add_argument('attr_name', help="Attribute name.")
-    p_attr.add_argument('--plot', default=False, action="store_true", help="Plot data with matplotlib (requires floats).")
-    p_attr.add_argument('--show', default=False, action="store_true", help="Print attributes available in file")
+    p_getattr = subparsers.add_parser('getattr', parents=[copts_parser], help=abicomp_getattr.__doc__)
+    p_getattr.add_argument('--plot', default=False, action="store_true", help="Plot data with matplotlib (requires floats).")
+    p_getattr.add_argument('--list', default=False, action="store_true", help="Print attributes available in file")
 
     # Subparser for robot commands
-    robot_parents = [copts_parser, ipy_parser, robot_parser]
+    # Use own version of ipy_parser with different default values.
+    robot_ipy_parser = argparse.ArgumentParser(add_help=False)
+    robot_ipy_parser.add_argument('-nb', '--notebook', default=False, action="store_true", help='Generate jupyter notebook.')
+    robot_ipy_parser.add_argument('--foreground', action='store_true', default=False,
+        help="Run jupyter notebook in the foreground.")
+    #robot_ipy_parser.add_argument('-ipy', '--ipython', default=True, action="store_true", help='Invoke ipython terminal.')
+    robot_ipy_parser.add_argument('-p', '--print', default=False, action="store_true", help='Print robot and return.')
+    robot_ipy_parser.add_argument("-e", '--expose', default=False, action="store_true",
+            help='Execute robot.expose to produce a pre-defined list of matplotlib figures.')
+    robot_ipy_parser.add_argument("-s", "--slide-mode", default=False, action="store_true",
+            help="Used if --expose to iterate over figures. Expose all figures at once if not given on the CLI.")
+    robot_ipy_parser.add_argument("-t", "--slide-timeout", type=int, default=None,
+            help="Close figure after slide-timeout seconds (only if slide-mode). Block if not specified.")
+
+    #robot_parents = [copts_parser, ipy_parser, robot_parser]
+    robot_parents = [copts_parser, robot_ipy_parser, robot_parser]
     p_gsr = subparsers.add_parser('gsr', parents=robot_parents, help=abicomp_gsr.__doc__)
     p_hist = subparsers.add_parser('hist', parents=robot_parents, help=abicomp_hist.__doc__)
     p_ddb = subparsers.add_parser('ddb', parents=robot_parents, help=abicomp_ddb.__doc__)
+    p_phbst = subparsers.add_parser('phbst', parents=robot_parents, help=abicomp_phbst.__doc__)
     p_sigres = subparsers.add_parser('sigres', parents=robot_parents, help=abicomp_sigres.__doc__)
     p_mdf = subparsers.add_parser('mdf', parents=robot_parents, help=abicomp_mdf.__doc__)
     p_optic = subparsers.add_parser('optic', parents=robot_parents, help=abicomp_optic.__doc__)
@@ -843,6 +965,11 @@ def main():
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % options.loglevel)
     logging.basicConfig(level=numeric_level)
+
+    if options.mpl_backend is not None:
+        # Set matplotlib backend
+        import matplotlib
+        matplotlib.use(options.mpl_backend)
 
     if options.seaborn:
         # Use seaborn settings.

@@ -87,6 +87,9 @@ class GSRFileTestCase(AbipyTest):
             self.assert_almost_equal(gsr.energy.to("Ha"), -8.86527676798556)
             self.assert_almost_equal(gsr.energy_per_atom * len(gsr.structure), gsr.energy)
 
+            assert gsr.params["nband"] == 8
+            assert gsr.params["nkpt"] == 29
+
             # Test energy_terms
             eterms = gsr.energy_terms
             repr(eterms); str(eterms)
@@ -130,11 +133,15 @@ class GSRFileTestCase(AbipyTest):
                 assert d["energy"] == gsr.energy
                 assert gsr.energy == e.energy
 
+            if self.has_matplotlib():
+                assert gsr.plot_ebands(show=False)
+                assert gsr.plot_ebands_with_edos(edos=gsr.ebands.get_edos(), show=False)
+
             if self.has_nbformat():
                 gsr.write_notebook(nbpath=self.get_tmpname(text=True))
 
 
-class GstRobotTest(AbipyTest):
+class GsrRobotTest(AbipyTest):
 
     def test_gsr_robot(self):
         """Testing GSR robot"""
@@ -142,9 +149,12 @@ class GstRobotTest(AbipyTest):
         gsr_path = abidata.ref_file("si_scf_GSR.nc")
         robot = abilab.GsrRobot()
         robot.add_file("gsr0", gsr_path)
-        assert len(robot.ncfiles) == 1
+        assert len(robot.abifiles) == 1
+        assert "gsr0" in robot.keys()
+        assert "gsr0" in robot.labels
         assert robot.EXT == "GSR"
         repr(robot); str(robot)
+        assert robot.to_string(verbose=2)
 
 	# Cannot have same label
         with self.assertRaises(ValueError):
@@ -157,7 +167,10 @@ class GstRobotTest(AbipyTest):
         with self.assertRaises(AttributeError):
             robot.is_sortable("foobar", raise_exc=True)
         assert not robot.is_sortable("foobar")
-        assert robot.is_sortable("nkpt")
+        # Test different syntax.
+        assert robot.is_sortable("nkpt")         # gsr.nkpt
+        assert robot.is_sortable("ebands.nkpt")  # gsr.ebands.nkpt
+        assert robot.is_sortable("ecut")         # in gsr.params
 
         dfs = robot.get_structure_dataframes()
         assert dfs.lattice is not None
@@ -169,7 +182,23 @@ class GstRobotTest(AbipyTest):
 
         if self.has_matplotlib():
             assert ebands_plotter.gridplot(show=False)
+            assert robot.combiplot_ebands(show=False)
+            assert robot.gridplot_ebands(show=False)
+            assert robot.boxplot_ebands(show=False)
+            assert robot.combiboxplot_ebands(show=False)
+
             assert edos_plotter.gridplot(show=False)
+            assert robot.combiplot_edos(show=False)
+            assert robot.gridplot_edos(show=False)
+
+            assert robot.plot_gsr_convergence(show=False)
+            assert robot.plot_gsr_convergence(sortby="nkpt", hue="tsmear", show=False)
+            y_vars = ["energy", "structure.lattice.a", "structure.volume"]
+            assert robot.plot_convergence_items(y_vars, sortby="nkpt", hue="tsmear", show=False)
+
+            assert robot.plot_egaps(show=False)
+            assert robot.plot_egaps(sortby="nkpt", hue="tsmear")
+            assert robot.gridplot_with_hue("structure.formula", show=False)
 
 	# Get pandas dataframe.
         df = robot.get_dataframe()
@@ -177,9 +206,44 @@ class GstRobotTest(AbipyTest):
         self.assert_equal(df["ecut"].values, 6.0)
         self.assert_almost_equal(df["energy"].values, -241.2364683)
 
-        # FIXME
-        #eos = robot.eos_fit()
+        df_params = robot.get_params_dataframe()
+        assert "nband" in df_params
+
+        assert "alpha" in robot.get_lattice_dataframe()
+        assert hasattr(robot.get_coords_dataframe(), "keys")
+
+        eterms_df = robot.get_energyterms_dataframe(iref=0)
+        assert "energy" in eterms_df
+        assert "ecut" in eterms_df
+        assert "nkpt" in eterms_df
+
+        if self.has_matplotlib():
+            assert robot.plot_xy_with_hue(df, x="nkpt", y="pressure", hue="a", show=False)
+
+        # Note: This is not a real EOS since we have a single volume.
+        # But testing is better than not testing.
+        r = robot.get_eos_fits_dataframe()
+        assert hasattr(r, "fits") and hasattr(r, "dataframe")
+
+        if self.has_matplotlib():
+            assert robot.gridplot_eos(show=False)
+
         if self.has_nbformat():
             robot.write_notebook(nbpath=self.get_tmpname(text=True))
 
         robot.close()
+
+        # Test other class methods
+        filepath = abidata.ref_file("si_scf_GSR.nc")
+        robot = abilab.GsrRobot.from_dirs(os.path.dirname(filepath), abspath=True)
+        assert len(robot) == 2
+        assert robot[filepath].filepath == filepath
+
+        # Test from_dir_glob
+        pattern = "%s/*/si_ebands/" % abidata.dirpath
+        same_robot = abilab.GsrRobot.from_dir_glob(pattern, abspath=True)
+        assert len(same_robot) == 2
+        assert set(robot.labels) == set(same_robot.labels)
+
+        robot.close()
+        same_robot.close()

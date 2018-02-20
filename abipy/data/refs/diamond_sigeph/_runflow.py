@@ -112,27 +112,25 @@ def build_flow(options):
 
     flow.allocate()
 
-    # EPH does not support autoparal (yet)
-    for eph_task in eph_work:
-        eph_task.with_fixed_mpi_omp(1, 1)
-
     return flow
 
 
-@abilab.flow_main
+@flowtk.flow_main
 def main(options):
-    flow = build_flow(options)
-    flow.build_and_pickle_dump()
-    return flow
+    return build_flow(options)
+
 
 if __name__ == "__main__":
     retcode = main()
     if retcode != 0: sys.exit(retcode)
 
     rename_table = [
-        #  src, dest
-        ("_runflow/w2/t1/outdata/out_SIGEPH.nc", "test_SIGEPH.nc"),
+        # src, dest
+        #("_runflow/w0/t1/outdata/out_GSR.nc", "diamond_kpath_GSR.nc"),
+        #("_runflow/w1/outdata/out_DDB", "diamond_444q_DDB"),
+        ("_runflow/w2/t1/outdata/out_SIGEPH.nc", "diamond_444q_SIGEPH.nc"),
     ]
+
     import shutil
     for old, new in rename_table:
         shutil.copyfile(old, new)

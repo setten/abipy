@@ -23,21 +23,19 @@ ArrayWithUnit = units.ArrayWithUnit
 ####################
 ### Abipy import ###
 ####################
-from abipy.flowtk import Pseudo, PseudoTable, Mrgscr, Mrgddb, Mrggkk, Flow, TaskManager, AbinitBuild, flow_main
-#from pymatgen.io.abinit.flows import (Flow, G0W0WithQptdmFlow, bandstructure_flow, PhononFlow,
-#    g0w0_flow, phonon_flow, phonon_conv_flow, nonlinear_coeff_flow)
-
+from abipy.flowtk import Pseudo, PseudoTable, Mrgscr, Mrgddb, Mrggkk, Flow, Work, TaskManager, AbinitBuild, flow_main
 from abipy.core.release import __version__, min_abinit_version
+from abipy.core.globals import enable_notebook, in_notebook, disable_notebook
 from abipy.core import restapi
 from abipy.core.structure import (Lattice, Structure, StructureModifier, dataframes_from_structures,
   mp_match_structure, mp_search, cod_search)
 from abipy.core.mixins import CubeFile
+from abipy.core.func1d import Function1D
 from abipy.core.kpoints import set_atol_kdiff
-from abipy.htc.input import AbiInput, LdauParams, LexxParams, input_gen
 from abipy.abio.robots import Robot
 from abipy.abio.inputs import AbinitInput, MultiDataset, AnaddbInput, OpticInput
 from abipy.abio.abivars import AbinitInputFile
-from abipy.abio.outputs import AbinitLogFile, AbinitOutputFile, OutNcFile #, CubeFile
+from abipy.abio.outputs import AbinitLogFile, AbinitOutputFile, OutNcFile, AboRobot #, CubeFile
 #from abipy.tools.plotting import DirTreePlotter
 from abipy.tools.printing import print_dataframe
 from abipy.tools.notebooks import print_source
@@ -56,7 +54,7 @@ from abipy.electrons.denpot import (DensityNcFile, VhartreeNcFile, VxcNcFile, Vh
 from abipy.electrons.fatbands import FatBandsFile
 from abipy.electrons.optic import OpticNcFile, OpticRobot
 from abipy.electrons.fold2bloch import Fold2BlochNcfile
-from abipy.dfpt.phonons import (PhbstFile, PhononBands, PhononBandsPlotter, PhdosFile, PhononDosPlotter,
+from abipy.dfpt.phonons import (PhbstFile, PhbstRobot, PhononBands, PhononBandsPlotter, PhdosFile, PhononDosPlotter,
     PhdosReader, phbands_gridplot)
 from abipy.dfpt.ddb import DdbFile, DdbRobot
 from abipy.dfpt.anaddbnc import AnaddbNcFile
@@ -164,8 +162,8 @@ def dir2abifiles(top, recurse=True):
     """
     Analyze the filesystem starting from directory `top` and
     return an ordered dictionary mapping the directory name to the list
-    of files supported by `abiopen` contained within that directory.
-    If not `recurse`, children directories are not analyzed.
+    of files supported by ``abiopen`` contained within that directory.
+    If not ``recurse``, children directories are not analyzed.
     """
     dl = collections.defaultdict(list)
 
@@ -186,7 +184,7 @@ def dir2abifiles(top, recurse=True):
 
 def isabifile(filepath):
     """
-    Return True if `filepath` can be opened with `abiopen`.
+    Return True if `filepath` can be opened with ``abiopen``.
     """
     try:
         abifile_subclass_from_filename(filepath)
