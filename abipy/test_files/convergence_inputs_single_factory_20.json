@@ -128,8 +128,13 @@
     [
       "toldfe", 
       1e-08
+    ],
+    [
+      "symsigma",
+      1
     ]
-  ], 
+
+  ],
   "decorators": [], 
   "pseudos": [
     {
